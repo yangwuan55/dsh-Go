@@ -82,7 +82,7 @@ class CallService : Service() {
         if (nm.getNotificationChannel(CHANNEL_ID) != null) return
         nm.createNotificationChannel(
             NotificationChannel(CHANNEL_ID, AppStrings.get(this, R.string.speech_call_channel), NotificationManager.IMPORTANCE_LOW).apply {
-                description = AppStrings.get(this, R.string.speech_call_channel_description)
+                description = AppStrings.get(this@CallService, R.string.speech_call_channel_description)
                 setSound(null, null)
                 enableVibration(false)
                 setShowBadge(false)
