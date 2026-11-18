@@ -396,6 +396,32 @@ void main() {
     expect(rig.audio.calls, containsAllInOrder(['mute:true', 'speaker:false', 'callStop']));
   });
 
+  test('saying 挂断 ends the call on its own, without sending a message', () async {
+    final rig = _Rig();
+    await rig.call.start();
+    rig.cloud.text = '那就挂断吧';
+    await rig.say();
+    expect(rig.call.phase, CallPhase.ended);
+    expect(rig.call.ended, CallEnd.hungUp);
+    expect(rig.conversation.sent, isEmpty);
+    expect(rig.call.turns, isEmpty);
+    expect(rig.audio.calls, contains('callStop'));
+  });
+
+  test('挂断 over her voice ends the call and stops her too', () async {
+    final rig = await speaking();
+    final before = rig.conversation.sent.length;
+    rig.cloud.text = '挂断';
+    rig.audio.emit(const SpeechStart(over: true));
+    rig.audio.emit(Utterance(_Rig.second, const Duration(milliseconds: 600)));
+    await pumpEventQueue();
+    expect(rig.call.phase, CallPhase.ended);
+    expect(rig.call.ended, CallEnd.hungUp);
+    expect(rig.conversation.sent, hasLength(before));
+    expect(rig.outs.single.stopped, isTrue);
+    expect(rig.conversation.interrupts, 0);
+  });
+
   test('停顿多久算说完: the chosen one opens the call; a change reaches the microphone at once', () async {
     final rig = _Rig(pause: CallPause.normal);
     await rig.call.start();

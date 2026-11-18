@@ -19,4 +19,13 @@ void main() {
       expect(overWords(said), OverWords.speech, reason: said);
     }
   });
+
+  test('挂断, with any softener, asks to end the call; ordinary words do not', () {
+    for (final said in ['挂断', '挂断吧。', '那就挂断', '我挂断了', 'Hang up!', 'end the call']) {
+      expect(isHangUp(said), isTrue, reason: said);
+    }
+    for (final said in ['今天天气怎么样', '别说了', '嗯', '好的挂了', 'hang in there', '', '…']) {
+      expect(isHangUp(said), isFalse, reason: said);
+    }
+  });
 }

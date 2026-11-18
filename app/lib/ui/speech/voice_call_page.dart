@@ -318,7 +318,11 @@ class _VoiceCallPageState extends ConsumerState<VoiceCallPage> with WidgetsBindi
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.paused || state == AppLifecycleState.hidden) _call.backgrounded();
+    if (state != AppLifecycleState.paused && state != AppLifecycleState.hidden) return;
+    // Android's microphone foreground service (speech/CallService.kt) keeps the call alive behind
+    // another app and with the screen locked. Without that lease the microphone goes silent, so
+    // the other platforms still end the call instead of listening to nothing.
+    if (ref.read(operatingSystemProvider) != 'android') _call.backgrounded();
   }
 
   @override

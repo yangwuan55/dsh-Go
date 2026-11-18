@@ -260,6 +260,10 @@
     <string name="safe_config_missing">找不到主配置 profiles/web/package.json</string>
     <string name="safe_config_busy">插件配置正被别的程序修改，稍后再试</string>
     <!-- service -->
+    <string name="speech_call_channel">语音通话</string>
+    <string name="speech_call_channel_description">进行中的语音通话，点按返回通话页</string>
+    <string name="speech_call_notification_title">语音通话中</string>
+    <string name="speech_call_notification_text">点按返回通话</string>
     <string name="service_stopped_channel">引擎停止提醒</string>
     <string name="service_stopped_title">本地 DSH 已停止</string>
     <string name="service_updating">正在更新运行环境</string>

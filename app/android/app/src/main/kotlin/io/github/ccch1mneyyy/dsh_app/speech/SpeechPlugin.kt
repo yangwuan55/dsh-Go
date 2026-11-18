@@ -32,7 +32,8 @@ import io.github.ccch1mneyyy.dsh_app.nativemedia.TurnPause
  * {on}; `callBargeIn` {on}; `callPause` {pause: quick|normal|patient}; `callPlaying` {on} (another player of the app's voice, such as the phone's
  * own text-to-speech, started or stopped); `callSpeaker` {on}. A call holds the app's one microphone
  * ([MicArbiter]) and puts audio in communication mode, on the loudspeaker unless a headset is there;
- * the screen stays on meanwhile (a backgrounded app gets no microphone).
+ * the screen stays on while it is up; a microphone-type foreground service ([CallService]) keeps
+ * the call (and its notification) alive behind other apps and on the lock screen.
  *
  * Events come back as `event` calls with a `type`: `play` {what: start|done|stopped|error, id},
  * `playLevel` {id, value}, `speechStart` {over}, `utterance` {wav, ms}, `micLevel` {value},
@@ -225,6 +226,9 @@ class SpeechPlugin : FlutterPlugin, ActivityAware, MethodChannel.MethodCallHandl
             return "permission"
         }
         endCall()
+        // Android cuts the microphone of a backgrounded app; the foreground service keeps this
+        // call runnable after the person switches away or locks the screen.
+        if (!CallService.start(context)) return "unavailable"
         mic = MicArbiter.beginDictation()
         val marks = NativeTrial.marks(context.getSharedPreferences("speech_native", Context.MODE_PRIVATE))
         val c = CallCapture(main, captureListener) { SpeechGates.create(context.assets, it, marks) }
@@ -289,6 +293,7 @@ class SpeechPlugin : FlutterPlugin, ActivityAware, MethodChannel.MethodCallHandl
 
     @Suppress("DEPRECATION")
     private fun endCall() {
+        CallService.stop()
         val c = capture
         capture = null
         c?.stop()

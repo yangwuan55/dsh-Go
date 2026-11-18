@@ -407,6 +407,35 @@ void main() {
     expect(again.read(callSettingsProvider).backdrop, CallBackdrop.image);
     expect(again.read(callSettingsProvider).image, '/x/backdrop-1.jpg');
   });
+
+  testWidgets('Android: backgrounding or hiding the app keeps the call listening', (tester) async {
+    final (audio, _) = await pumpCall(
+      tester,
+      extra: [operatingSystemProvider.overrideWithValue('android')],
+    );
+    expect(find.text('在听'), findsOneWidget);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+    await tester.pump();
+    expect(audio.calls, isNot(contains('callStop')));
+    expect(find.text('在听'), findsOneWidget);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
+    await tester.pump();
+    expect(audio.calls, isNot(contains('callStop')));
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+  });
+
+  testWidgets('without a background microphone lease, going away ends the call', (tester) async {
+    final (audio, _) = await pumpCall(
+      tester,
+      extra: [operatingSystemProvider.overrideWithValue('ohos')],
+    );
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+    for (var i = 0; i < 10; i++) {
+      await tester.pump(const Duration(milliseconds: 60));
+    }
+    expect(audio.calls, contains('callStop'));
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+  });
 }
 
 /// Her voice's settings, read only once [_gate] opens.
