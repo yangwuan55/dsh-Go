@@ -17,9 +17,6 @@ import 'android_features.dart' show operatingSystemProvider;
 import 'artifacts.dart';
 import 'connection_state.dart';
 
-/// Largest file fetched from a remote Host for open / share / save.
-const maxRemoteArtifactBytes = 300 * 1024 * 1024;
-
 /// Largest remote image fetched just to draw a thumbnail.
 const maxThumbnailBytes = 8 * 1024 * 1024;
 
@@ -131,12 +128,14 @@ class ArtifactFiles {
   }
 
   /// An Android file holding [artifact]; [onProgress] gets 0–1 (null while
-  /// the size is unknown) during a download.
+  /// the size is unknown) during a download. Bytes are streamed to disk, so a
+  /// remote file has no size cap here. [maxBytes] is only for a caller that
+  /// deliberately wants one (a thumbnail), not for open / share / save.
   Future<File> materialize(
     String sessionId,
     Artifact artifact, {
     void Function(double? progress)? onProgress,
-    int maxBytes = maxRemoteArtifactBytes,
+    int? maxBytes,
   }) async {
     final conn = connection;
     if (conn == null) throw const ArtifactError('offline');
@@ -151,14 +150,18 @@ class ArtifactFiles {
     final client = conn.client;
     if (!client.canReadFileBytes) throw const ArtifactError('unsupported');
     final stat = await client.statFile(sessionId, artifact.path);
-    if (stat.bytes != null && stat.bytes! > maxBytes) throw const ArtifactError('workspace-file/too-large');
+    if (maxBytes != null && stat.bytes != null && stat.bytes! > maxBytes) {
+      throw const ArtifactError('workspace-file/too-large');
+    }
     final root = await _cacheRoot();
     final key = _fnv('${conn.hostId ?? conn.label}\n$sessionId\n${artifact.path}');
     final dir = Directory('${root.path}/artifacts/$key');
     final target = File('${dir.path}/${_safeName(artifact.name)}');
     final marker = File('${dir.path}/.version');
     if (target.existsSync() && marker.existsSync() && marker.readAsStringSync() == stat.version) {
-      if (await target.length() > maxBytes) throw const ArtifactError('workspace-file/too-large');
+      if (maxBytes != null && await target.length() > maxBytes) {
+        throw const ArtifactError('workspace-file/too-large');
+      }
       return target;
     }
     await dir.create(recursive: true);
@@ -176,7 +179,9 @@ class ArtifactFiles {
           maxBytes: maxBytes,
           onChunk: (chunk) async {
             received += chunk.length;
-            if (received > maxBytes) throw const ArtifactError('workspace-file/too-large');
+            if (maxBytes != null && received > maxBytes) {
+              throw const ArtifactError('workspace-file/too-large');
+            }
             await sink.writeFrom(chunk);
           },
           onProgress: onProgress == null
