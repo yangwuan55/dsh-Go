@@ -37,6 +37,7 @@ void main() {
     bool still = false,
     void Function()? opened,
     String said = '这周末北京天气怎么样',
+    String? prompt,
     Future<VoiceCloud?> Function()? recognizer,
   }) async {
     tester.view.physicalSize = const Size(1170, 2532);
@@ -55,7 +56,7 @@ void main() {
                     MaterialPageRoute<void>(
                       builder: (context) => MediaQuery(
                         data: MediaQuery.of(context).copyWith(disableAnimations: still),
-                        child: VoiceCallPage(title: '周末去哪儿玩', conversation: conversation),
+                        child: VoiceCallPage(title: '周末去哪儿玩', conversation: conversation, openingPrompt: prompt),
                       ),
                     ),
                   ),
@@ -98,6 +99,13 @@ void main() {
       ),
       findsOneWidget,
     );
+  });
+
+  testWidgets('an answered turn sends its handover prompt as the first message', (tester) async {
+    const prompt = '请简要汇报你刚才完成的工作：做了什么、结果如何、有没有需要我确认或接手的事项。';
+    final (_, conversation) = await pumpCall(tester, prompt: prompt);
+    expect(conversation.sent, hasLength(1));
+    expect(withoutAppNotes(conversation.sent.single), prompt);
   });
 
   testWidgets('a turn on the page: heard, sent, the reply arriving; hang up closes it', (tester) async {

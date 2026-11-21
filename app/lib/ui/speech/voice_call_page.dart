@@ -60,16 +60,19 @@ Future<void> openChatCall(
   BuildContext context, {
   required String title,
   required Future<String?> Function() session,
+  String? openingPrompt,
 }) async {
   final container = ProviderScope.containerOf(context, listen: false);
   container.read(readAloudProvider.notifier).stop();
+  final conversation = ChatCallConversation(container, session);
   await Navigator.of(context).push(
     PageRouteBuilder<void>(
       opaque: true,
       fullscreenDialog: true,
       transitionDuration: AppMotion.of(context, const Duration(milliseconds: 520)),
       reverseTransitionDuration: AppMotion.of(context, AppMotion.collapse),
-      pageBuilder: (_, _, _) => VoiceCallPage(title: title, conversation: ChatCallConversation(container, session)),
+      pageBuilder: (_, _, _) =>
+          VoiceCallPage(title: title, conversation: conversation, openingPrompt: openingPrompt),
       transitionsBuilder: (_, animation, _, child) {
         final curve = CurvedAnimation(parent: animation, curve: AppMotion.enter, reverseCurve: AppMotion.exit);
         // Opening: the page rises out of the dark.
@@ -85,10 +88,11 @@ Future<void> openChatCall(
 }
 
 class VoiceCallPage extends ConsumerStatefulWidget {
-  const VoiceCallPage({super.key, required this.title, required this.conversation});
+  const VoiceCallPage({super.key, required this.title, required this.conversation, this.openingPrompt});
 
   final String title;
   final CallConversation conversation;
+  final String? openingPrompt;
 
   @override
   ConsumerState<VoiceCallPage> createState() => _VoiceCallPageState();
@@ -219,6 +223,12 @@ class _VoiceCallPageState extends ConsumerState<VoiceCallPage> with WidgetsBindi
     final asr = ref.read(streamingAsrProvider);
     final found = liveWordsModel(ref);
     await _call.start();
+    // The reply stream is subscribed inside start(): sending before the call
+    // listens would leave its report unheard. Same send path as a typed message.
+    final prompt = widget.openingPrompt;
+    if (prompt != null && mounted && _call.phase == CallPhase.listening) {
+      unawaited(widget.conversation.send(prompt));
+    }
     try {
       final chosen = await found;
       if (chosen == null || !mounted || _call.phase == CallPhase.ended) return;

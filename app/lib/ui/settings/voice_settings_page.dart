@@ -15,6 +15,7 @@ import '../../state/voice_settings.dart';
 import '../../state/voice_state.dart';
 import '../common/app_dialog.dart';
 import '../companion/companion_voice_page.dart';
+import 'background_guide_page.dart';
 import '../providers/provider_widgets.dart';
 import '../speech/call/call_backdrop.dart';
 import '../shell/page_frame.dart';
@@ -216,6 +217,25 @@ class _VoiceSettingsPageState extends ConsumerState<VoiceSettingsPage> {
               }),
               onTap: () => unawaited(showCallBackdropSheet(context)),
             ),
+            SettingsSwitchTile(
+              key: const ValueKey('speech-call-incoming'),
+              title: l10n.stateAlertTurnDone,
+              subtitle: l10n.speechCallFooter,
+              value: call.incomingCall,
+              onChanged: (on) => unawaited(calls.edit((saved) => saved.copyWith(incomingCall: on))),
+            ),
+            // Lock-screen calls need Android's background/autostart switches;
+            // the same guide the settings screen uses covers the Chinese ROMs.
+            if (ref.watch(androidSystemFeaturesProvider))
+              SettingsTile(
+                key: const ValueKey('speech-call-incoming-guide'),
+                icon: AppIcons.keepAlive,
+                title: l10n.accessBatteryTitle,
+                subtitle: l10n.accessBatteryWhy,
+                onTap: () => unawaited(
+                  Navigator.of(context).push<void>(MaterialPageRoute(builder: (_) => const BackgroundGuidePage())),
+                ),
+              ),
             SettingsSwitchTile(
               key: const ValueKey('speech-call-barge-in'),
               title: l10n.speechCallBargeIn,

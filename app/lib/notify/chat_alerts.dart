@@ -449,6 +449,7 @@ class HostAlertTracker {
     this.isCompanionAttached,
     this.announceDelay = const Duration(milliseconds: 800),
     this.reconcileDelay = const Duration(seconds: 3),
+    this.turnSeqs,
   });
 
   final HostRef host;
@@ -488,6 +489,11 @@ class HostAlertTracker {
   /// After a reconnect the Host redelivers what is still pending; requests not
   /// redelivered within this window were settled while we were away.
   final Duration reconcileDelay;
+
+  /// Last alerted turn seq per host/session. Shared by all trackers and saved
+  /// by the owner, so a reconnect does not forget a turn finished while away.
+  final Map<String, int>? turnSeqs;
+  final Map<String, int> _ownTurnSeqs = {};
 
   StreamSubscription<HostEvent>? _sub;
   Timer? _reconcile;
@@ -562,6 +568,34 @@ class HostAlertTracker {
     _disposed = true;
     _reconcile?.cancel();
     await _sub?.cancel();
+  }
+
+  /// Catch-up after a lost connection or a resume: compare every session's
+  /// last turn with the last one alerted on, however long ago it finished.
+  /// The first sight of a session is a baseline, never a historical call.
+  Future<void> sweep() async {
+    await _resync();
+    if (_disposed) return;
+    final seen = turnSeqs ?? _ownTurnSeqs;
+    for (final session in _sessions.values) {
+      if (session.running || _disposed) continue;
+      TurnOutcome? last;
+      try {
+        last = await source.lastTurn(session.sessionId).timeout(const Duration(seconds: 3));
+      } catch (_) {
+        continue;
+      }
+      if (last == null || _disposed) continue;
+      final key = '${host.kind.name}:${host.id}:${session.sessionId}';
+      final previous = seen[key];
+      if (previous == null) {
+        seen[key] = last.seq;
+        continue;
+      }
+      if (last.seq <= previous) continue;
+      await _onIdle(session.sessionId, freshness: 'swept');
+      seen[key] = last.seq;
+    }
   }
 
   void _onEvent(HostEvent event) {

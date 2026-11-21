@@ -11280,6 +11280,16 @@
   "stateAlertPublicApproval": "有一步等你确认",
   "stateAlertPublicQuestion": "有个问题等你回答",
   "stateAlertTurnDone": "这一轮已完成",
+  "stateIncomingCallReportPrompt": "请简要汇报你刚才完成的工作：做了什么、结果如何、有没有需要我确认或接手的事项。",
+  "stateMissedCall": "未接来电：{title}",
+  "@stateMissedCall": {
+    "placeholders": {
+      "title": {
+        "type": "String"
+      }
+    }
+  },
+  "stateMissedCallPublic": "未接来电",
   "stateAlertOutputLimit": "已结束 · 达到单次输出长度上限",
   "stateAlertTurnBlocked": "这一轮被拦截了",
   "stateAlertEngineRestarted": "已中断 · 引擎重启过",

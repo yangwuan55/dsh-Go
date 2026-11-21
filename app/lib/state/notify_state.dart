@@ -19,9 +19,11 @@ import 'bots_state.dart';
 import 'chat_state.dart';
 import 'connection_state.dart';
 import 'hosts_state.dart';
+import 'incoming_call_state.dart';
 import 'phone_turn_end.dart';
 import 'phone_state.dart' show phoneChannelProvider;
 import 'sessions_state.dart';
+import '../speech/speech_settings.dart' show callSettingsProvider;
 
 export '../notify/chat_alerts.dart';
 export '../notify/notify_channel.dart';
@@ -172,6 +174,60 @@ class FlagController extends Notifier<bool> {
 /// shade is down). Set from the app lifecycle by the alert host.
 final appForegroundProvider = NotifierProvider<FlagController, bool>(() => FlagController(true));
 
+/// Every configured host, local and remote. Kept here so attaching their alert
+/// trackers does not perturb connection setup inside ChatAlertsController.build.
+final catchUpHostsProvider = Provider<List<HostRef>>((ref) {
+  final ssh = ref.watch(hostsProvider.select((s) => s.ssh));
+  final relay = ref.watch(relayAccountProvider.select((a) => a.value?.hosts)) ?? const <RelayHost>[];
+  return [
+    for (final host in ssh) HostRef.ssh(host.id),
+    for (final host in relay) HostRef.relay(host.id),
+  ];
+});
+
+/// The live `$events` edge is not replayed after a disconnect. Every half hour,
+/// and on returning to the foreground, kick down links and look for turns that
+/// finished while we were away.
+final callCatchUpProvider = NotifierProvider<CallCatchUpController, void>(CallCatchUpController.new);
+
+class CallCatchUpController extends Notifier<void> {
+  Timer? _timer;
+
+  @override
+  void build() {
+    ref.onDispose(() => _timer?.cancel());
+    final hosts = ref.watch(catchUpHostsProvider);
+    for (final host in hosts) {
+      ref.listen(remoteConnectionProvider(host), (_, next) {
+        ref.read(chatAlertsProvider.notifier).attachHost(host, next.value);
+      }, fireImmediately: true);
+    }
+    // Only a hidden app needs a wall-clock check: while it is on screen the
+    // links retry on their own. No timer while visible also keeps widget tests
+    // from finishing with a live periodic timer.
+    ref.listen(appForegroundProvider, (was, now) {
+      if (!now) {
+        _timer ??= Timer.periodic(const Duration(minutes: 30), (_) => unawaited(run()));
+      } else {
+        _timer?.cancel();
+        _timer = null;
+        if (was == false) unawaited(run());
+      }
+    });
+  }
+
+  Future<void> run() async {
+    if (!ref.read(callSettingsProvider.select((s) => s.incomingCall))) return;
+    if (ref.read(localConnectionProvider).hasError) ref.invalidate(localConnectionProvider);
+    for (final host in ref.read(catchUpHostsProvider)) {
+      ref.read(remoteConnectionProvider(host).notifier).retryIfDown();
+    }
+    // One sweep per attached host; each source lists all its sessions, i.e.
+    // every workspace there. Live trackers already cover local + all remotes.
+    await ref.read(chatAlertsProvider.notifier).sweepAllHosts();
+  }
+}
+
 /// The chat is the current route (no settings page or sheet pushed over it).
 final chatOnScreenProvider = NotifierProvider<FlagController, bool>(() => FlagController(true));
 
@@ -301,6 +357,10 @@ class ChatAlertsController extends Notifier<ChatAlert?> {
   /// state to read or replace).
   bool _built = false;
   StreamSubscription<NotifyAction>? _actions;
+  static const _turnSeqKey = 'incoming_call_turn_seqs';
+  final Map<String, int> _turnSeqs = {};
+  SharedPreferences? _callPrefs;
+  late Future<void> _turnSeqsReady;
 
   NotifyChannel get _channel => ref.read(notifyChannelProvider);
 
@@ -313,9 +373,10 @@ class ChatAlertsController extends Notifier<ChatAlert?> {
   @override
   ChatAlert? build() {
     _built = false;
-    _lifetime = Object();
     final channel = _channel;
+    _turnSeqsReady = _loadTurnSeqs();
     unawaited(() async {
+      await _turnSeqsReady;
       if (!(await channel.status()).native || !ref.mounted) return;
       _actions = channel.actions.listen((action) async {
         await channel.completeAction(action, await respondAction(action));
@@ -339,9 +400,6 @@ class ChatAlertsController extends Notifier<ChatAlert?> {
     ref.listen(activeConnectionProvider, (_, next) {
       final conn = next.value;
       final host = conn == null ? null : _remoteRef(conn);
-      for (final other in [..._trackers.keys]) {
-        if (!other.isLocal && other != host) _attach(other, null);
-      }
       if (host != null) _attach(host, conn);
     }, fireImmediately: true);
     ref.listen(viewedChatProvider, (_, viewed) {
@@ -373,6 +431,30 @@ class ChatAlertsController extends Notifier<ChatAlert?> {
     });
     _built = true;
     return null;
+  }
+
+  Future<void> _loadTurnSeqs() async {
+    try {
+      _callPrefs = await SharedPreferences.getInstance();
+      final raw = _callPrefs?.getString(_turnSeqKey);
+      if (raw == null) return;
+      final decoded = jsonDecode(raw);
+      if (decoded is Map) {
+        for (final entry in decoded.entries) {
+          if (entry.key is String && entry.value is int) _turnSeqs[entry.key] = entry.value as int;
+        }
+      }
+    } catch (_) {
+      // No saved baseline: the first sweep seeds it.
+    }
+  }
+
+  /// Active catch-up: every attached host, every session/workspace on it.
+  Future<void> sweepAllHosts() async {
+    await _turnSeqsReady;
+    final trackers = [for (final (_, tracker) in _trackers.values) tracker];
+    await Future.wait([for (final tracker in trackers) tracker.sweep()]);
+    await _callPrefs?.setString(_turnSeqKey, jsonEncode(_turnSeqs));
   }
 
   /// Answers the approval behind a tapped notification button on its host.
@@ -508,6 +590,9 @@ class ChatAlertsController extends Notifier<ChatAlert?> {
     };
   }
 
+  /// Called by the catch-up provider for every configured remote host.
+  void attachHost(HostRef host, HostConnection? connection) => _attach(host, connection);
+
   void _attach(HostRef host, HostConnection? connection) {
     final current = _trackers[host];
     if (current != null && identical(current.$1, connection)) return;
@@ -561,6 +646,7 @@ class ChatAlertsController extends Notifier<ChatAlert?> {
           attached() && scope.exists(chatProvider(sessionId)) && scope.read(chatProvider(sessionId)).autoApprove,
       announceDelay: timing.announce,
       reconcileDelay: timing.reconcile,
+      turnSeqs: _turnSeqs,
     );
     _trackers[host] = (connection, tracker);
     tracker.start();
@@ -598,6 +684,15 @@ class ChatAlertsController extends Notifier<ChatAlert?> {
         identical(_trackers[alert.host]?.$2, attached.$2) &&
         identical(attached.$1.client.mux.generation, generation) &&
         attached.$2.source.connected;
+    // Background and lock-screen turns ring too: the native full-screen page
+    // is exactly the UI for them. The in-app overlay draws when it is visible.
+    if (alert.kind == AlertKind.done && current()) {
+      unawaited(
+        ref.read(incomingCallProvider.notifier).offer(
+          IncomingCall(host: alert.host, sessionId: alert.sessionId, title: alert.title),
+        ),
+      );
+    }
     if (_offerPhonePrompt(alert)) return;
     // The turn that drove the phone: its overlay closes and the app may come
     // back to the conversation first (state/phone_turn_end.dart); the alert

@@ -143,6 +143,7 @@ class CallSettings {
     this.cue = true,
     this.visual = CallVisual.glass,
     this.pause = CallPause.normal,
+    this.incomingCall = true,
   });
 
   /// Speaking over her stops her (else what is said while she talks is ignored).
@@ -167,6 +168,9 @@ class CallSettings {
   /// How long a pause ends what the person says.
   final CallPause pause;
 
+  /// Whether a finished turn raises the in-app call.
+  final bool incomingCall;
+
   CallSettings copyWith({
     bool? bargeIn,
     bool? spoken,
@@ -176,6 +180,7 @@ class CallSettings {
     bool? cue,
     CallVisual? visual,
     CallPause? pause,
+    bool? incomingCall,
   }) => CallSettings(
     bargeIn: bargeIn ?? this.bargeIn,
     spoken: spoken ?? this.spoken,
@@ -185,6 +190,7 @@ class CallSettings {
     cue: cue ?? this.cue,
     visual: visual ?? this.visual,
     pause: pause ?? this.pause,
+    incomingCall: incomingCall ?? this.incomingCall,
   );
 }
 
@@ -213,6 +219,7 @@ class CallSettingsController extends Notifier<CallSettings> {
         cue: json['cue'] != false,
         visual: CallVisual.values.asNameMap()[json['visual']] ?? CallVisual.glass,
         pause: CallPause.values.asNameMap()[json['pause']] ?? CallPause.normal,
+        incomingCall: json['incomingCall'] != false,
       );
     } on Object {
       // Defaults for this run.
@@ -253,6 +260,7 @@ class CallSettingsController extends Notifier<CallSettings> {
         'cue': next.cue,
         'visual': next.visual.name,
         'pause': next.pause.name,
+        'incomingCall': next.incomingCall,
       }),
     );
   }

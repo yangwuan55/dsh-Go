@@ -34892,6 +34892,24 @@ abstract class L10n {
   /// **'这一轮已完成'**
   String get stateAlertTurnDone;
 
+  /// No description provided for @stateIncomingCallReportPrompt.
+  ///
+  /// In zh, this message translates to:
+  /// **'请简要汇报你刚才完成的工作：做了什么、结果如何、有没有需要我确认或接手的事项。'**
+  String get stateIncomingCallReportPrompt;
+
+  /// No description provided for @stateMissedCall.
+  ///
+  /// In zh, this message translates to:
+  /// **'未接来电：{title}'**
+  String stateMissedCall(String title);
+
+  /// No description provided for @stateMissedCallPublic.
+  ///
+  /// In zh, this message translates to:
+  /// **'未接来电'**
+  String get stateMissedCallPublic;
+
   /// No description provided for @stateAlertOutputLimit.
   ///
   /// In zh, this message translates to:

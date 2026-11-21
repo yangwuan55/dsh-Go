@@ -18983,6 +18983,17 @@ class L10nZh extends L10n {
   String get stateAlertTurnDone => '这一轮已完成';
 
   @override
+  String get stateIncomingCallReportPrompt => '请简要汇报你刚才完成的工作：做了什么、结果如何、有没有需要我确认或接手的事项。';
+
+  @override
+  String stateMissedCall(String title) {
+    return '未接来电：$title';
+  }
+
+  @override
+  String get stateMissedCallPublic => '未接来电';
+
+  @override
   String get stateAlertOutputLimit => '已结束 · 达到单次输出长度上限';
 
   @override

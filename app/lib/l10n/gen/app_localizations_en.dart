@@ -20031,6 +20031,18 @@ class L10nEn extends L10n {
   String get stateAlertTurnDone => 'This turn finished';
 
   @override
+  String get stateIncomingCallReportPrompt =>
+      'Briefly report the work you just finished: what you did, the result, and anything you need me to confirm or take over.';
+
+  @override
+  String stateMissedCall(String title) {
+    return 'Missed call: $title';
+  }
+
+  @override
+  String get stateMissedCallPublic => 'Missed call';
+
+  @override
   String get stateAlertOutputLimit => 'Ended · Output limit reached';
 
   @override

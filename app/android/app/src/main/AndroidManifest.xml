@@ -7,6 +7,8 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- Full-screen incoming-call intent (notify/IncomingCallService.kt); normal permission. -->
+    <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
     <!-- The live activity (notify/LiveActivity.kt): Android 16 QPR1+ promotes it to a Live Update.
          Normal, granted at install; older systems skip a permission they don't define. -->
     <uses-permission android:name="android.permission.POST_PROMOTED_NOTIFICATIONS" />
@@ -84,6 +86,15 @@
             <!-- No launcher intent-filter here: the launcher entries are the aliases below.
                  (MainActivity.getMetaData reads the meta-data above whichever alias opened it.) -->
         </activity>
+
+        <!-- Full-screen call page raised by the notification's full-screen intent. -->
+        <activity
+            android:name=".notify.IncomingCallActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:showOnLockScreen="true"
+            android:turnScreenOn="true"
+            android:theme="@android:style/Theme.Material.NoActionBar" />
 
         <!-- 桌面图标 (icons/LauncherIcons.kt): one launcher entry per icon, all opening MainActivity;
              exactly one is enabled. Each carries the long-press shortcuts (新对话, 语音输入;
@@ -273,6 +284,16 @@
             <property
                 android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
                 android:value="Shows the user's floating assistant pet while their remote agent session runs" />
+        </service>
+
+        <!-- Keeps the host connections and Dart alive while finished-turn calls are on. -->
+        <service
+            android:name=".notify.IncomingCallService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Shows an incoming call screen when the user's agent turns finish" />
         </service>
 
         <!-- 手机操控: reads and drives the main screen, owns the status bar / confirm overlay (phone/a11y). -->

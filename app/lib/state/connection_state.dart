@@ -314,6 +314,12 @@ class RemoteConnectionController extends AsyncNotifier<HostConnection?> {
     return wrap(await link.open());
   }
 
+  /// Periodic catch-up only kicks a link that is actually down.
+  void retryIfDown() {
+    final phase = ref.read(hostLinkProvider(host))?.status.phase;
+    if (state.hasError || phase == HostLinkPhase.failed) retry();
+  }
+
   /// Gives up any backoff and connects again now.
   void retry() {
     final link = ref.read(hostLinkProvider(host));

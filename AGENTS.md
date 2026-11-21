@@ -126,6 +126,20 @@ CI（`.github/workflows/ci.yml`）在 PR 上跑通用检查和改动涉及的部
 - 代码审查：走 `.agents/skills/review`（证据优先，只报本次改动引入的实质问题）。
 - 缺陷报告：`.agents/skills/bug`；安全审计：`.agents/skills/vuln-check`；大范围审计：`.agents/skills/audit`。
 
+## Agent skills
+
+### Issue tracker
+
+Issues and specs live in GitHub Issues via `gh`. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Five canonical triage roles with default label strings. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context: root `GLOSSARY.md` and `docs/adr/`. See `docs/agents/domain.md`.
+
 ## 编辑本文件
 
 `CLAUDE.md` 是指向 `AGENTS.md` 的符号链接；编辑真身。每条规则保持自包含，细节链接到权威文档。
