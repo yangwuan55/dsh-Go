@@ -32,6 +32,7 @@ import '../../speech/voice_cloud.dart';
 import '../../state/account_state.dart';
 import '../../state/app_notes.dart';
 import '../../state/hosts_state.dart' show HostKind, activeHostProvider;
+import '../../state/incoming_call_bridge.dart';
 import '../../state/notify_state.dart';
 import '../../state/voice_settings.dart';
 import '../../state/voice_state.dart';
@@ -60,18 +61,25 @@ Future<void> openChatCall(
   required String title,
   required Future<String?> Function() session,
   String? openingPrompt,
+  bool placeTelecomCall = true,
 }) async {
   final container = ProviderScope.containerOf(context, listen: false);
   container.read(readAloudProvider.notifier).stop();
   final conversation = ChatCallConversation(container, session);
+  // Claim the chat now, before the first message: turns arriving during setup queue.
+  container.read(callChatProvider.notifier).set((host: container.read(activeHostProvider), sessionId: ''));
   await Navigator.of(context).push(
     PageRouteBuilder<void>(
       opaque: true,
       fullscreenDialog: true,
       transitionDuration: AppMotion.of(context, const Duration(milliseconds: 520)),
       reverseTransitionDuration: AppMotion.of(context, AppMotion.collapse),
-      pageBuilder: (_, _, _) =>
-          VoiceCallPage(title: title, conversation: conversation, openingPrompt: openingPrompt),
+      pageBuilder: (_, _, _) => VoiceCallPage(
+        title: title,
+        conversation: conversation,
+        openingPrompt: openingPrompt,
+        placeTelecomCall: placeTelecomCall,
+      ),
       transitionsBuilder: (_, animation, _, child) {
         final curve = CurvedAnimation(parent: animation, curve: AppMotion.enter, reverseCurve: AppMotion.exit);
         // Opening: the page rises out of the dark.
@@ -87,11 +95,20 @@ Future<void> openChatCall(
 }
 
 class VoiceCallPage extends ConsumerStatefulWidget {
-  const VoiceCallPage({super.key, required this.title, required this.conversation, this.openingPrompt});
+  const VoiceCallPage({
+    super.key,
+    required this.title,
+    required this.conversation,
+    this.openingPrompt,
+    this.placeTelecomCall = true,
+  });
 
   final String title;
   final CallConversation conversation;
   final String? openingPrompt;
+
+  /// An answered incoming call already had its Telecom call; don't take a second one.
+  final bool placeTelecomCall;
 
   @override
   ConsumerState<VoiceCallPage> createState() => _VoiceCallPageState();
@@ -224,7 +241,14 @@ class _VoiceCallPageState extends ConsumerState<VoiceCallPage> with WidgetsBindi
     final asr = ref.read(streamingAsrProvider);
     final found = liveWordsModel(ref);
     _callConnect = ref.read(usageStatsProvider.notifier).beginOperation(UsageOperation.callConnect);
-    await _call.start();
+    final bridge = ref.read(incomingCallBridgeProvider);
+    try {
+      if (widget.placeTelecomCall) unawaited(bridge.placeCall(widget.title));
+      await _call.start();
+    } finally {
+      // Telecom's privileged route must not outlive the setup: SpeechPlugin owns the audio.
+      if (widget.placeTelecomCall) unawaited(bridge.endOutgoing());
+    }
     // The reply stream is subscribed inside start(): sending before the call
     // listens would leave its report unheard. Same send path as a typed message.
     final prompt = widget.openingPrompt;

@@ -216,6 +216,7 @@ class _IncomingCallLayerState extends ConsumerState<_IncomingCallLayer> {
         title: call.title,
         session: () async => ref.read(activeHostProvider) == call.host ? call.sessionId : null,
         openingPrompt: appL10n.stateIncomingCallReportPrompt,
+        placeTelecomCall: false,
       ),
     );
   }

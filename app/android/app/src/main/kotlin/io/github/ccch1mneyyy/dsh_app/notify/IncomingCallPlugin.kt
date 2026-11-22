@@ -60,6 +60,14 @@ class IncomingCallPlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
                 if (shown) result.success(null)
                 else result.error("call_show_failed", "Android refused the Telecom incoming call", null)
             }
+            "placeCall" -> {
+                DshConnectionService.placeCall(ctx, call.argument<String>("title").orEmpty())
+                result.success(null)
+            }
+            "endOutgoing" -> {
+                DshConnectionService.endOutgoing()
+                result.success(null)
+            }
             "answered" -> {
                 DshConnectionService.answerFromDart()
                 result.success(null)

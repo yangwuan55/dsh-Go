@@ -321,7 +321,6 @@
     <string name="background_viewport_invalid">Unknown background viewport preset</string>
     <string name="background_viewport_save_failed">Could not save the background viewport preference.</string>
     <!-- incoming call -->
-    <string name="incoming_call_keep_channel">Incoming call keep-alive</string>
     <string name="incoming_call_alert_channel">Incoming call</string>
     <string name="incoming_call_title">Task finished</string>
     <string name="incoming_call_answer">Answer</string>

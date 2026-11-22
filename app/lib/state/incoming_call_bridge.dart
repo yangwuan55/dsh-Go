@@ -41,7 +41,13 @@ class IncomingCallBridge {
 
   Future<void> show(String title, String sessionId) => _send('show', {'title': title, 'sessionId': sessionId});
 
-  /// Answered: keep the telecom call alive, only take down the ringing page.
+  /// A voice call borrows Telecom's call state until its own audio is up.
+  Future<void> placeCall(String title) => _send('placeCall', {'title': title});
+
+  /// The borrowed call is released without touching an incoming ring.
+  Future<void> endOutgoing() => _send('endOutgoing');
+
+  /// Answered: the native side leaves Telecom, the voice call owns the audio.
   Future<void> answered() => _send('answered');
 
   Future<void> dismiss() => _send('dismiss');

@@ -61,7 +61,7 @@ void main() {
         reason: 'the foreground turn must not raise a telecom call');
   });
 
-  test('a turn queued in the background is not raised after returning to the foreground', () async {
+  test('queued turns still ring one at a time after returning to the foreground', () async {
     final container = _containerWithSwitch(true);
     addTearDown(container.dispose);
     final methods = <String>[];
@@ -73,14 +73,20 @@ void main() {
     final notifier = container.read(incomingCallProvider.notifier);
     await notifier.offer(_call);
     await notifier.offer(const IncomingCall(host: HostRef.local, sessionId: 's2', title: '下一个任务'));
+    await notifier.offer(const IncomingCall(host: HostRef.local, sessionId: 's3', title: '再下一个任务'));
     notifier.accept();
     methods.clear();
     container.read(appForegroundProvider.notifier).set(true);
 
     container.read(callChatProvider.notifier).set(null);
+    await Future<void>.delayed(Duration.zero);
 
-    expect(methods, isNot(contains('show')),
-        reason: 'a foreground turn is left to its notification, even when it was queued earlier');
+    expect(container.read(incomingCallProvider)?.sessionId, 's2');
+    expect(methods, contains('show'), reason: 'a queued turn is still put to the person after the call ends');
+    notifier.dismiss();
+    expect(container.read(incomingCallProvider)?.sessionId, 's3');
+    notifier.dismiss();
+    expect(container.read(incomingCallProvider), isNull);
   });
 
   test('the telecom call ends when the voice call page closes', () async {
@@ -102,13 +108,21 @@ void main() {
     expect(methods, contains('dismiss'), reason: 'an answered call must not stay up after the chat page closes');
   });
 
-  test('switch off: completion does not ring', () async {
+  test('switch off: completion does not ring, but the telecom account is still prepared', () async {
     final container = _containerWithSwitch(false);
     addTearDown(container.dispose);
+    final methods = <String>[];
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(const MethodChannel('dsh/incoming_call'), (call) async {
+      methods.add(call.method);
+      return null;
+    });
 
     await container.read(incomingCallProvider.notifier).offer(_call);
 
     expect(container.read(incomingCallProvider), isNull);
+    expect(methods, contains('prepare'), reason: 'outgoing calls need the account with reminders off');
+    expect(methods, isNot(contains('show')));
   });
 
   test('hanging up drops the prompt without taking a call', () async {
@@ -155,7 +169,7 @@ void main() {
     expect(container.read(incomingCallProvider), isNull);
     expect(methods.map((c) => c.method), contains('answered'));
     expect(methods.map((c) => c.method), isNot(contains('dismiss')),
-        reason: 'answering keeps the telecom call alive; only the ringing page goes away');
+        reason: 'answering does not count as a missed call; Telecom is left in native');
 
     await notifier.offer(_call);
     await native('timeout');

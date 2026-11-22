@@ -20,6 +20,7 @@ import android.os.Looper
 import android.os.PowerManager
 import io.github.ccch1mneyyy.dsh_app.MainActivity
 import io.github.ccch1mneyyy.dsh_app.R
+import io.github.ccch1mneyyy.dsh_app.notify.IncomingCallService
 import io.github.ccch1mneyyy.dsh_app.phone.PhoneControl
 
 /** Foreground service that keeps the local DSH process alive in the background. */
@@ -178,6 +179,8 @@ class DshService : Service() {
     private fun stopForegroundCompat() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) stopForeground(STOP_FOREGROUND_REMOVE)
         else @Suppress("DEPRECATION") stopForeground(true)
+        // Removing it also removes the shared row from the call keep-alive service.
+        IncomingCallService.repost(this)
     }
 
     companion object {
@@ -198,7 +201,7 @@ class DshService : Service() {
         /** With [ACTION_INSTALL_DONE]: the unpack finished (true) or stopped. */
         const val EXTRA_INSTALL_OK = "ok"
         private const val CHANNEL_ID = "dsh-runtime"
-        private const val NOTIFICATION_ID = 3080
+        internal const val NOTIFICATION_ID = 3080
         private const val ALERT_ID = 3081
         private const val ALERT_CHANNEL = "dsh-runtime-alert"
         private const val INSTALL_ALERT_ID = 3082
@@ -283,6 +286,12 @@ class DshService : Service() {
 
         /** The service is in the foreground (so the controller may start DSH directly). */
         val isRunning: Boolean get() = running
+
+        /** The single DSH Go notification, shared with the incoming-call keep-alive service. */
+        internal fun foregroundNotification(context: Context): Notification {
+            ensureChannel(context)
+            return buildNotification(context, RuntimeController.get(context))
+        }
 
         fun updateNotification(context: Context) {
             if (!running) return

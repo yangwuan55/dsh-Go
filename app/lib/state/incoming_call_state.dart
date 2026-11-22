@@ -36,7 +36,6 @@ class IncomingCallController extends Notifier<IncomingCall?> {
         );
     // Changing the switch retires a prompt still on screen and its native page.
     ref.listen(callSettingsProvider.select((s) => s.autoAnswer), (was, on) {
-      if (on && was != true) unawaited(bridge.prepare());
       if (!on && was == true) {
         unawaited(bridge.dismiss());
         _pendingAnswer = null;
@@ -51,7 +50,8 @@ class IncomingCallController extends Notifier<IncomingCall?> {
         unawaited(_presentNext());
       }
     });
-    if (ref.read(callSettingsProvider.select((s) => s.autoAnswer))) unawaited(bridge.prepare());
+    // Outgoing voice calls need the same Telecom account even with reminders off.
+    unawaited(bridge.prepare());
     return null;
   }
 
@@ -75,11 +75,8 @@ class IncomingCallController extends Notifier<IncomingCall?> {
   /// One at a time: neither a prompt on screen nor a live call is interrupted.
   Future<void> _presentNext() async {
     if (_queue.isEmpty || state != null || !ref.mounted || ref.read(callChatProvider) != null) return;
-    // A turn queued in the background was already notified; don't ring it once the app is on screen.
-    if (ref.read(appForegroundProvider)) {
-      _queue.clear();
-      return;
-    }
+    // A queued turn keeps its place even if the app came back to the foreground:
+    // it is put to the person when the call ends, one at a time.
     await _ring(_queue.removeAt(0));
   }
 

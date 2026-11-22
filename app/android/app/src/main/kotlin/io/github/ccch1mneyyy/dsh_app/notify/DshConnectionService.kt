@@ -28,7 +28,7 @@ import android.util.Log
 import io.github.ccch1mneyyy.dsh_app.R
 import io.github.ccch1mneyyy.dsh_app.i18n.AppStrings
 
-/** Self-managed Telecom call: Telecom routes audio and keeps the lock-screen call alive; our page draws the UI. */
+/** Self-managed Telecom call for the ringing page; the answered voice call owns audio itself. */
 class DshConnectionService : ConnectionService() {
     override fun onCreate() {
         super.onCreate()
@@ -51,7 +51,8 @@ class DshConnectionService : ConnectionService() {
                 settled = true
                 stopRinging()
                 signal("answer")
-                setActive()
+                // Leave Telecom here too: a lost Dart signal must not strand its privileged route.
+                endFromDart()
             }
 
             override fun onDisconnect() {
@@ -94,12 +95,41 @@ class DshConnectionService : ConnectionService() {
         }
     }
 
+    override fun onCreateOutgoingConnection(account: PhoneAccountHandle?, request: ConnectionRequest?): Connection {
+        val title = request?.extras?.getString(IncomingCallService.EXTRA_TITLE).orEmpty()
+        val connection = object : Connection() {
+            private var ended = false
+
+            override fun onDisconnect() {
+                if (ended) return
+                ended = true
+                if (outgoing === this) outgoing = null
+                setDisconnected(DisconnectCause(DisconnectCause.LOCAL))
+                destroy()
+            }
+        }
+        // Dart may have left before this callback; never strand a borrowed route.
+        if (!outgoingWanted) {
+            connection.setDisconnected(DisconnectCause(DisconnectCause.LOCAL))
+            connection.destroy()
+            return connection
+        }
+        outgoing = connection
+        connection.setAddress(Uri.parse("dsh:outgoing"), TelecomManager.PRESENTATION_ALLOWED)
+        connection.setCallerDisplayName(title, TelecomManager.PRESENTATION_ALLOWED)
+        // Only the system call state is borrowed; SpeechPlugin owns the audio from here on.
+        connection.setActive()
+        return connection
+    }
+
     companion object {
         private const val TAG = "DshIncomingCall"
         private const val ACCOUNT_ID = "dsh-incoming"
         private const val PAGE_CHANNEL = "dsh-incoming-page-v2"
         private const val PAGE_ID = 3092
         @Volatile private var active: Connection? = null
+        @Volatile private var outgoing: Connection? = null
+        @Volatile private var outgoingWanted = false
         @Volatile private var settled = false
         @Volatile private var appContext: Context? = null
         @Volatile private var ringtone: Ringtone? = null
@@ -228,24 +258,46 @@ class DshConnectionService : ConnectionService() {
             }
         }
 
-        /** Dart answered: keep the connection up so the voice session outlives the ringing page. */
-        fun answerFromDart() {
-            val connection = active ?: return
-            settled = true
-            stopRinging()
-            cancelCallPage()
-            connection.setActive()
+        /** A voice call borrows the system call state; no ring, no notification, no Dart signal. */
+        fun placeCall(context: Context, title: String) {
+            val app = context.applicationContext
+            val manager = telecom(app) ?: return
+            register(app)
+            val extras = Bundle().apply {
+                putString(IncomingCallService.EXTRA_TITLE, title)
+                putParcelable(TelecomManager.EXTRA_PHONE_ACCOUNT_HANDLE, handle(app))
+            }
+            outgoingWanted = true
+            try {
+                manager.placeCall(Uri.parse("dsh:outgoing"), extras)
+            } catch (e: Exception) {
+                outgoingWanted = false
+                Log.w(TAG, "Telecom refused the outgoing call", e)
+            }
         }
+
+        /** The voice call is up: leave Telecom without touching a ringing incoming call. */
+        fun endOutgoing() {
+            outgoingWanted = false
+            val placed = outgoing ?: return
+            outgoing = null
+            placed.setDisconnected(DisconnectCause(DisconnectCause.LOCAL))
+            placed.destroy()
+        }
+
+        /** Dart answered: leave Telecom so its privileged earpiece route cannot override the call's speaker. */
+        fun answerFromDart() = endFromDart()
 
         /** Dart dismissed or turned the switch off: end the telecom call without signalling back. */
         fun endFromDart() {
-            val connection = active ?: return
+            endOutgoing()
+            val incoming = active ?: return
             active = null
             settled = true
             stopRinging()
             cancelCallPage()
-            connection.setDisconnected(DisconnectCause(DisconnectCause.LOCAL))
-            connection.destroy()
+            incoming.setDisconnected(DisconnectCause(DisconnectCause.LOCAL))
+            incoming.destroy()
         }
 
         /** Whether the user still has to enable our calling account in the phone app's settings. */

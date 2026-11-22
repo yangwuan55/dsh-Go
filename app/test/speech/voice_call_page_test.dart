@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:typed_data';
 
 import 'package:dsh_app/companion/companion_voice_source.dart';
 import 'package:dsh_app/speech/deepseek_speech.dart';
@@ -10,6 +9,7 @@ import 'package:dsh_app/speech/call/voice_call.dart';
 import 'package:dsh_app/speech/voice_cloud.dart';
 import 'package:dsh_app/state/app_notes.dart';
 import 'package:dsh_app/state/hosts_state.dart' show HostRef, activeHostProvider;
+import 'package:dsh_app/state/notify_state.dart' show callChatProvider;
 import 'package:dsh_app/state/voice_state.dart';
 import 'package:dsh_app/ui/speech/call/call_backdrop.dart';
 import 'package:dsh_app/ui/speech/call/call_parts.dart';
@@ -17,6 +17,7 @@ import 'package:dsh_app/ui/speech/voice_call_page.dart';
 import 'package:dsh_app/state/android_features.dart' show operatingSystemProvider;
 import 'package:dsh_app/ui/speech/call/call_visuals.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
@@ -39,6 +40,7 @@ void main() {
     String said = '这周末北京天气怎么样',
     String? prompt,
     Future<VoiceCloud?> Function()? recognizer,
+    bool placeTelecomCall = true,
   }) async {
     tester.view.physicalSize = const Size(1170, 2532);
     tester.view.devicePixelRatio = 3;
@@ -56,7 +58,12 @@ void main() {
                     MaterialPageRoute<void>(
                       builder: (context) => MediaQuery(
                         data: MediaQuery.of(context).copyWith(disableAnimations: still),
-                        child: VoiceCallPage(title: '周末去哪儿玩', conversation: conversation, openingPrompt: prompt),
+                        child: VoiceCallPage(
+                          title: '周末去哪儿玩',
+                          conversation: conversation,
+                          openingPrompt: prompt,
+                          placeTelecomCall: placeTelecomCall,
+                        ),
                       ),
                     ),
                   ),
@@ -86,6 +93,78 @@ void main() {
     }
     return (audio, conversation);
   }
+
+  testWidgets('a voice call raises a telecom call, then leaves the audio to the speech plugin', (tester) async {
+    const channel = MethodChannel('dsh/incoming_call');
+    final methods = <String>[];
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, (call) async {
+      methods.add(call.method);
+      return null;
+    });
+    addTearDown(() => TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, null));
+
+    await pumpCall(tester);
+
+    expect(methods.indexOf('placeCall'), greaterThanOrEqualTo(0),
+        reason: 'an outgoing call must get the system call state');
+    expect(methods.lastIndexOf('endOutgoing'), greaterThan(methods.indexOf('placeCall')),
+        reason: 'telecom must let go of the audio route once the speech call is up');
+  });
+
+  testWidgets('an answered incoming call does not take a second telecom call', (tester) async {
+    const channel = MethodChannel('dsh/incoming_call');
+    final methods = <String>[];
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, (call) async {
+      methods.add(call.method);
+      return null;
+    });
+    addTearDown(() => TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, null));
+
+    await pumpCall(tester, placeTelecomCall: false);
+
+    expect(methods, isNot(contains('placeCall')),
+        reason: 'the hands-free fix left Telecom at answer; the voice call must not return to that route');
+  });
+
+  testWidgets('opening a call claims the chat before its first message', (tester) async {
+    late final ProviderContainer container;
+    await tester.pumpWidget(
+      testApp(
+        Builder(builder: (context) {
+          container = ProviderScope.containerOf(context);
+          return TextButton(
+            onPressed: () => unawaited(openChatCall(context, title: '测试通话', session: () async => 's1')),
+            child: const Text('open call'),
+          );
+        }),
+        overrides: [
+          speechAudioProvider.overrideWithValue(FakeAudio()),
+          callRecognizerProvider.overrideWithValue(() async => FakeCloud('你好')),
+          voiceBridgeProvider.overrideWithValue(FakeVoiceBridge()),
+          deepSeekSpeechProvider.overrideWithValue(() async => FakeDeepSeek()),
+        ],
+      ),
+    );
+
+    await tester.tap(find.text('open call'));
+    await tester.pump();
+    expect(container.read(callChatProvider), isNotNull,
+        reason: 'turns arriving during call setup must queue, not ring over it');
+
+    for (var i = 0; i < 25; i++) {
+      await tester.pump(const Duration(milliseconds: 60));
+      if (i % 5 == 0) await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 20)));
+    }
+    await tester.tap(find.byKey(const ValueKey('call-hang-up')));
+    for (var i = 0; i < 40; i++) {
+      await tester.pump(const Duration(milliseconds: 60));
+    }
+    expect(container.read(callChatProvider), isNull);
+  });
 
   testWidgets('relay call without a recognizer explains the relay, not billing', (tester) async {
     await pumpCall(

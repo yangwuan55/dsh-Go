@@ -314,7 +314,6 @@
     <string name="background_viewport_invalid">未知的后台视口预设</string>
     <string name="background_viewport_save_failed">无法保存后台视口设置。</string>
     <!-- incoming call -->
-    <string name="incoming_call_keep_channel">来电保活</string>
     <string name="incoming_call_alert_channel">来电</string>
     <string name="incoming_call_title">任务已完成</string>
     <string name="incoming_call_answer">接听</string>
