@@ -9,7 +9,6 @@ export const SHARE_MAX_ITEMS: number = 9;
 export const SHARE_MAX_FILE: number = 200 * 1024 * 1024;
 export const SHARE_MAX_TOTAL: number = 400 * 1024 * 1024;
 export const SHARE_MAX_TEXT: number = 200000;
-export const SHARE_OUT_MAX_BYTES: number = 300 * 1024 * 1024;
 export const SHARE_MAX_RECORDS: number = 500;
 export const SHARE_METADATA_BUDGET: number = 180 * 1024;
 

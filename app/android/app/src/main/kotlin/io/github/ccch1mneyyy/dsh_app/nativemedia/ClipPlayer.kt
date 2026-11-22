@@ -5,6 +5,7 @@ import android.media.AudioAttributes
 import android.media.AudioFocusRequest
 import android.media.AudioManager
 import android.media.MediaPlayer
+import io.github.ccch1mneyyy.dsh_app.speech.CallAudio
 import java.io.File
 import java.io.FileInputStream
 
@@ -45,15 +46,16 @@ class ClipPlayer(context: Context, private val listener: Listener) {
     fun play(file: File): Boolean {
         release()
         val gen = ++generation
+        val attrs = CallAudio.attributes()
         val p = MediaPlayer()
         player = p
         return try {
-            p.setAudioAttributes(ATTRIBUTES)
+            p.setAudioAttributes(attrs)
             p.setOnPreparedListener {
                 if (gen != generation) return@setOnPreparedListener
                 prepared = true
                 if (!startWhenPrepared) return@setOnPreparedListener
-                if (!requestFocus()) {
+                if (!requestFocus(attrs)) {
                     finish(gen) { listener.onStopped("focus") }
                     return@setOnPreparedListener
                 }
@@ -96,7 +98,7 @@ class ClipPlayer(context: Context, private val listener: Listener) {
             return true
         }
         if (playing) return true
-        if (!requestFocus()) return false
+        if (!requestFocus(CallAudio.attributes())) return false
         return runCatching { p.start() }.onSuccess {
             playing = true
             if (!startWhenPrepared) {
@@ -124,13 +126,13 @@ class ClipPlayer(context: Context, private val listener: Listener) {
         then()
     }
 
-    private fun requestFocus(): Boolean {
+    private fun requestFocus(attrs: AudioAttributes): Boolean {
         val am = audio ?: return true
         // A focus event can outlive abandon/re-request. Bind both the listener identity
         // and its generation to this clip, rather than rebinding an old event to a new one.
         val gen = generation
         val request = focus ?: AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK)
-            .setAudioAttributes(ATTRIBUTES)
+            .setAudioAttributes(attrs)
             .setOnAudioFocusChangeListener { change ->
                 if (change == AudioManager.AUDIOFOCUS_LOSS || change == AudioManager.AUDIOFOCUS_LOSS_TRANSIENT) {
                     if (player != null) finish(gen) { listener.onStopped("interrupted") }
@@ -145,12 +147,5 @@ class ClipPlayer(context: Context, private val listener: Listener) {
         val request = focus ?: return
         focus = null
         runCatching { audio?.abandonAudioFocusRequest(request) }
-    }
-
-    private companion object {
-        val ATTRIBUTES: AudioAttributes = AudioAttributes.Builder()
-            .setUsage(AudioAttributes.USAGE_MEDIA)
-            .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
-            .build()
     }
 }

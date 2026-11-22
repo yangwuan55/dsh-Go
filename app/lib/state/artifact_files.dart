@@ -149,7 +149,7 @@ class ArtifactFiles {
     }
     final conn = connection;
     if (conn == null) throw const ArtifactError('offline');
-    final limit = maxBytes < 20 * 1024 * 1024 ? maxBytes : 20 * 1024 * 1024;
+    final limit = maxBytes == null || maxBytes >= 20 * 1024 * 1024 ? 20 * 1024 * 1024 : maxBytes;
     return snapshots.get(
       host: imageSnapshotHost(conn),
       sessionId: sessionId,
@@ -194,7 +194,7 @@ class ArtifactFiles {
     String sessionId,
     Artifact artifact, {
     void Function(double? progress)? onProgress,
-    int maxBytes = maxRemoteArtifactBytes,
+    int? maxBytes,
   }) async {
     final conn = connection;
     if (conn == null) throw const ArtifactError('offline');

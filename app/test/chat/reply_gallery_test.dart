@@ -36,7 +36,7 @@ class _PreviewFiles extends ArtifactFiles {
     String sessionId,
     Artifact artifact, {
     void Function(double? progress)? onProgress,
-    int maxBytes = maxRemoteArtifactBytes,
+    int? maxBytes,
   }) async {
     reads.add(artifact.path);
     return file;

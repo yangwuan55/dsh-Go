@@ -226,6 +226,16 @@ void main() {
     await rig.noStagingLeft();
   });
 
+  test('a remote file past the old cap downloads by default', () async {
+    rig.carrier.size = 400 * 1024 * 1024;
+    final download = rig.files.materialize('s1', _artifact);
+    await rig.carrier.entered[0].future;
+    rig.carrier.succeed(0);
+    final file = await download;
+    expect(await file.readAsBytes(), [1, 2, 3, 4]);
+    await rig.noStagingLeft();
+  });
+
   test('a stricter caller keeps its byte limit during overlap and after a cache hit', () async {
     rig.carrier.size = null;
     final strict = _observed(rig.files.materialize('s1', _artifact, maxBytes: 3));

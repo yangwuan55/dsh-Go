@@ -15,7 +15,6 @@ export const HARD_LIMITS = Object.freeze({
   maxImageBytes: 20 * 1024 * 1024,
   maxResponseBytes: 32 * 1024 * 1024,
   maxTotalImageBytes: 64 * 1024 * 1024,
-  maxVideoBytes: 300 * 1024 * 1024,
 });
 // Legacy general defaults stay first so old configs keep their exact meaning;
 // the image/video pairs are chosen by selectedRequest per tool kind.
@@ -256,8 +255,6 @@ export const Config = z.object({
     unknownPriceHoldCny: z.string().default('20').description('无可靠价格时每次预留金额；逐次确认，非供应商收费上限'),
   }).volatile().description('费用保护'),
   limits: z.object({
-    maxVideoBytes: z.number().step(1).min(1).max(HARD_LIMITS.maxVideoBytes)
-      .default(HARD_LIMITS.maxVideoBytes).description('视频原件字节上限'),
     maxImages: z.number().step(1).min(1).max(HARD_LIMITS.maxImages)
       .default(HARD_LIMITS.maxImages).description('单次图片张数上限'),
     maxImageBytes: z.number().step(1).min(1).max(HARD_LIMITS.maxImageBytes)

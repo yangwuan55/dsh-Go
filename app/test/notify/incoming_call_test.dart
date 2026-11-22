@@ -1,9 +1,14 @@
-// A finished turn raises the in-app call only while the global switch is on.
+// A finished turn raises the in-app call only while the call reminder switch is on.
 
+import 'dart:convert';
+
+import 'package:dsh_app/speech/speech_settings.dart';
 import 'package:dsh_app/state/hosts_state.dart';
 import 'package:dsh_app/state/incoming_call_bridge.dart';
 import 'package:dsh_app/state/incoming_call_state.dart';
-import 'package:dsh_app/state/notify_state.dart' show callChatProvider;
+import 'package:dsh_app/state/notify_state.dart' show appForegroundProvider, callChatProvider;
+import 'package:dsh_app/ui/notify/chat_alert_host.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -11,15 +16,21 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 const _call = IncomingCall(host: HostRef.local, sessionId: 's1', title: '修复登录按钮');
 
-ProviderContainer _containerWithSwitch(bool? enabled) {
-  SharedPreferences.setMockInitialValues(
-    enabled == null ? const {} : {'speech_call_v1': '{"incomingCall": $enabled}'},
-  );
-  return ProviderContainer();
+ProviderContainer _containerWithSwitch(bool? enabled) =>
+    _containerWithSettings(enabled == null ? const {} : {'autoAnswer': enabled});
+
+ProviderContainer _containerWithSettings(Map<String, Object> saved) {
+  SharedPreferences.setMockInitialValues({'speech_call_v1': jsonEncode(saved)});
+  final container = ProviderContainer();
+  // These tests describe turns that arrive while the app is in the background.
+  container.read(appForegroundProvider.notifier).set(false);
+  return container;
 }
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+  tearDown(() => TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+      .setMockMethodCallHandler(const MethodChannel('dsh/incoming_call'), null));
 
   test('completion rings by default; answering takes the prompt', () async {
     final container = _containerWithSwitch(null);
@@ -30,6 +41,65 @@ void main() {
     expect(container.read(incomingCallProvider), _call);
     expect(container.read(incomingCallProvider.notifier).accept(), _call);
     expect(container.read(incomingCallProvider), isNull);
+  });
+
+  test('a foreground turn is left to the notification, with no native call', () async {
+    final container = _containerWithSwitch(true);
+    addTearDown(container.dispose);
+    final methods = <String>[];
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(const MethodChannel('dsh/incoming_call'), (call) async {
+      methods.add(call.method);
+      return null;
+    });
+    container.read(appForegroundProvider.notifier).set(true);
+
+    await container.read(incomingCallProvider.notifier).offer(_call);
+
+    expect(container.read(incomingCallProvider), isNull);
+    expect(methods.where((m) => m != 'prepare'), isEmpty,
+        reason: 'the foreground turn must not raise a telecom call');
+  });
+
+  test('a turn queued in the background is not raised after returning to the foreground', () async {
+    final container = _containerWithSwitch(true);
+    addTearDown(container.dispose);
+    final methods = <String>[];
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(const MethodChannel('dsh/incoming_call'), (call) async {
+      methods.add(call.method);
+      return null;
+    });
+    final notifier = container.read(incomingCallProvider.notifier);
+    await notifier.offer(_call);
+    await notifier.offer(const IncomingCall(host: HostRef.local, sessionId: 's2', title: '下一个任务'));
+    notifier.accept();
+    methods.clear();
+    container.read(appForegroundProvider.notifier).set(true);
+
+    container.read(callChatProvider.notifier).set(null);
+
+    expect(methods, isNot(contains('show')),
+        reason: 'a foreground turn is left to its notification, even when it was queued earlier');
+  });
+
+  test('the telecom call ends when the voice call page closes', () async {
+    final container = _containerWithSwitch(true);
+    addTearDown(container.dispose);
+    final methods = <String>[];
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(const MethodChannel('dsh/incoming_call'), (call) async {
+      methods.add(call.method);
+      return null;
+    });
+    final notifier = container.read(incomingCallProvider.notifier);
+    await notifier.offer(_call);
+    notifier.accept();
+    methods.clear();
+
+    container.read(callChatProvider.notifier).set(null);
+
+    expect(methods, contains('dismiss'), reason: 'an answered call must not stay up after the chat page closes');
   });
 
   test('switch off: completion does not ring', () async {
@@ -83,7 +153,9 @@ void main() {
     await native('answer');
     expect(answered, [_call]);
     expect(container.read(incomingCallProvider), isNull);
-    expect(methods.map((c) => c.method), contains('dismiss'));
+    expect(methods.map((c) => c.method), contains('answered'));
+    expect(methods.map((c) => c.method), isNot(contains('dismiss')),
+        reason: 'answering keeps the telecom call alive; only the ringing page goes away');
 
     await notifier.offer(_call);
     await native('timeout');
@@ -92,6 +164,36 @@ void main() {
     await notifier.offer(_call);
     await native('hangup');
     expect(container.read(incomingCallProvider), isNull);
+  });
+
+  test('a debug broadcast raises the same call as a finished turn', () async {
+    const channel = MethodChannel('dsh/incoming_call');
+    final container = _containerWithSwitch(true);
+    addTearDown(container.dispose);
+    final bridge = container.read(incomingCallBridgeProvider);
+    container.read(incomingCallProvider.notifier);
+    final messenger = TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+    final methods = <String>[];
+    messenger.setMockMethodCallHandler(channel, (call) async {
+      methods.add(call.method);
+      if (call.method == 'debugOffer') {
+        final args = call.arguments as Map<dynamic, dynamic>;
+        bridge.onDebugOffer?.call(args['title'] as String? ?? '', args['sessionId'] as String? ?? '');
+      }
+      return null;
+    });
+
+    await messenger.handlePlatformMessage(
+      channel.name,
+      StandardMethodCodec().encodeMethodCall(
+        const MethodCall('debugOffer', {'title': '测试来电', 'sessionId': 'test-session'}),
+      ),
+      (_) {},
+    );
+
+    await Future<void>.delayed(const Duration(milliseconds: 50));
+    expect(container.read(incomingCallProvider)?.title, '测试来电');
+    expect(methods, contains('show'), reason: 'the debug trigger goes through the same native ring');
   });
 
   test('new turns queue while a call is up, then ring one at a time', () async {
@@ -179,5 +281,136 @@ void main() {
 
     expect(notifier.takePendingAnswer(), _call);
     expect(notifier.takePendingAnswer(), isNull);
+  });
+
+  testWidgets('a paused app is no longer foreground, so a finished turn rings', (tester) async {
+    final container = _containerWithSwitch(true);
+    addTearDown(container.dispose);
+    final methods = <String>[];
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(const MethodChannel('dsh/incoming_call'), (call) async {
+      methods.add(call.method);
+      return null;
+    });
+    await tester.pumpWidget(UncontrolledProviderScope(
+      container: container,
+      child: const ChatAlertHost(child: SizedBox.shrink()),
+    ));
+    container.read(appForegroundProvider.notifier).set(true);
+    await container.read(incomingCallProvider.notifier).offer(_call);
+    expect(methods, isNot(contains('show')), reason: 'a foreground turn only notifies');
+
+    addTearDown(() => tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed));
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+    await tester.pump();
+
+    expect(container.read(appForegroundProvider), isFalse, reason: 'swiping the app away leaves the foreground');
+    await container.read(incomingCallProvider.notifier).offer(
+      const IncomingCall(host: HostRef.local, sessionId: 's2', title: '后台任务'),
+    );
+    expect(methods, contains('show'), reason: 'a background turn must still ring');
+  });
+
+  test('the reminder switch never answers the call: a person must tap answer', () async {
+    final container = _containerWithSwitch(true);
+    addTearDown(container.dispose);
+    final methods = <String>[];
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(const MethodChannel('dsh/incoming_call'), (call) async {
+      methods.add(call.method);
+      return null;
+    });
+
+    await container.read(incomingCallProvider.notifier).offer(_call);
+
+    expect(methods, contains('show'));
+    expect(methods, isNot(contains('answered')), reason: 'no setting may pick up a telecom call');
+    expect(container.read(incomingCallProvider), _call, reason: 'the ring page stays until a person answers');
+    expect(container.read(incomingCallProvider.notifier).takePendingAnswer(), isNull);
+  });
+
+  test('call hours are on by default, all day when always on, and wrap at midnight', () {
+    const always = CallSettings(autoAnswer: true);
+    final night = CallSettings(
+      autoAnswer: true,
+      autoAnswerWindow: true,
+      autoAnswerStart: 22 * 60,
+      autoAnswerEnd: 8 * 60,
+    );
+    expect(callOffered(const CallSettings(), DateTime(2026, 11, 21, 23)), isTrue);
+    expect(callOffered(const CallSettings(autoAnswer: false), DateTime(2026, 11, 21, 12)), isFalse);
+    expect(callOffered(night, DateTime(2026, 11, 21, 21, 59)), isFalse);
+    expect(callOffered(night, DateTime(2026, 11, 21, 22)), isTrue);
+    expect(callOffered(night, DateTime(2026, 11, 22, 3)), isTrue);
+    expect(callOffered(night, DateTime(2026, 11, 22, 8)), isFalse, reason: 'the end time is exclusive');
+    expect(callOffered(night, DateTime(2026, 11, 22, 12)), isFalse);
+    expect(callOffered(always, DateTime(2026, 11, 22, 12)), isTrue);
+  });
+
+  test('outside the set hours no call is offered', () async {
+    final now = DateTime.now();
+    final minute = now.hour * 60 + now.minute;
+    final container = _containerWithSettings({
+      'autoAnswer': true,
+      'autoAnswerWindow': true,
+      'autoAnswerStart': (minute + 120) % 1440,
+      'autoAnswerEnd': (minute + 180) % 1440,
+    });
+    addTearDown(container.dispose);
+    final methods = <String>[];
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(const MethodChannel('dsh/incoming_call'), (call) async {
+      methods.add(call.method);
+      return null;
+    });
+
+    await container.read(incomingCallProvider.notifier).offer(_call);
+
+    expect(container.read(incomingCallProvider), isNull);
+    expect(methods, isNot(contains('show')), reason: 'only calls inside the hours are offered');
+  });
+
+  test('inside the set hours a call is offered, but not answered', () async {
+    final now = DateTime.now();
+    final minute = now.hour * 60 + now.minute;
+    final container = _containerWithSettings({
+      'autoAnswer': true,
+      'autoAnswerWindow': true,
+      'autoAnswerStart': (minute + 1440 - 60) % 1440,
+      'autoAnswerEnd': (minute + 60) % 1440,
+    });
+    addTearDown(container.dispose);
+    final methods = <String>[];
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(const MethodChannel('dsh/incoming_call'), (call) async {
+      methods.add(call.method);
+      return null;
+    });
+
+    await container.read(incomingCallProvider.notifier).offer(_call);
+
+    expect(methods, contains('show'));
+    expect(methods, isNot(contains('answered')));
+    expect(container.read(incomingCallProvider), _call);
+    expect(container.read(incomingCallProvider.notifier).takePendingAnswer(), isNull);
+  });
+
+  test('a call raised just before going foreground still waits for a person to answer', () async {
+    late final ProviderContainer container;
+    final methods = <String>[];
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(const MethodChannel('dsh/incoming_call'), (call) async {
+      methods.add(call.method);
+      if (call.method == 'show') container.read(appForegroundProvider.notifier).set(true);
+      return null;
+    });
+    container = _containerWithSwitch(true);
+    addTearDown(container.dispose);
+
+    await container.read(incomingCallProvider.notifier).offer(_call);
+
+    expect(methods, contains('show'));
+    expect(methods, isNot(contains('answered')),
+        reason: 'a foreground turn is left to its notification, even if it arrived in the background');
   });
 }

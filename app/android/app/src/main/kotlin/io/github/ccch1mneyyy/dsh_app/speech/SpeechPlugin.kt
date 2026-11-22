@@ -55,6 +55,8 @@ class SpeechPlugin : FlutterPlugin, ActivityAware, MethodChannel.MethodCallHandl
     private var speaker = true
     private var externalPlaying = false
     private var activity: ActivityPluginBinding? = null
+    private var volumeActivity: android.app.Activity? = null
+    private var previousVolumeStream = AudioManager.USE_DEFAULT_STREAM_TYPE
 
     override fun onAttachedToEngine(binding: FlutterPlugin.FlutterPluginBinding) {
         context = binding.applicationContext
@@ -70,16 +72,21 @@ class SpeechPlugin : FlutterPlugin, ActivityAware, MethodChannel.MethodCallHandl
 
     override fun onAttachedToActivity(binding: ActivityPluginBinding) {
         activity = binding
-        if (capture != null) keepScreenOn(true)
+        if (capture != null) {
+            keepScreenOn(true)
+            volumeKeysForCall(true)
+        }
     }
 
     override fun onDetachedFromActivityForConfigChanges() {
+        volumeKeysForCall(false)
         activity = null
     }
 
     override fun onReattachedToActivityForConfigChanges(binding: ActivityPluginBinding) = onAttachedToActivity(binding)
 
     override fun onDetachedFromActivity() {
+        volumeKeysForCall(false)
         keepScreenOn(false)
         activity = null
     }
@@ -89,6 +96,26 @@ class SpeechPlugin : FlutterPlugin, ActivityAware, MethodChannel.MethodCallHandl
         runCatching {
             if (on) window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
             else window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        }
+    }
+
+    /**
+     * Point the hardware volume keys at the call stream during a call. MODE_IN_COMMUNICATION
+     * usually does this on phones, but the platform does not promise it on every device, so
+     * bind the keys to the stream the call's AudioTrack actually uses. Restored on the same
+     * activity when the call ends (or the activity goes away), including after a rotation.
+     */
+    private fun volumeKeysForCall(on: Boolean) {
+        val act = activity?.activity ?: return
+        if (on) {
+            if (volumeActivity !== act) {
+                previousVolumeStream = act.volumeControlStream
+                volumeActivity = act
+            }
+            act.volumeControlStream = AudioManager.STREAM_VOICE_CALL
+        } else if (volumeActivity === act) {
+            act.volumeControlStream = previousVolumeStream
+            volumeActivity = null
         }
     }
 
@@ -229,6 +256,7 @@ class SpeechPlugin : FlutterPlugin, ActivityAware, MethodChannel.MethodCallHandl
         // Android cuts the microphone of a backgrounded app; the foreground service keeps this
         // call runnable after the person switches away or locks the screen.
         if (!CallService.start(context)) return "unavailable"
+        CallAudio.active = true
         mic = MicArbiter.beginDictation()
         val marks = NativeTrial.marks(context.getSharedPreferences("speech_native", Context.MODE_PRIVATE))
         val c = CallCapture(main, captureListener) { SpeechGates.create(context.assets, it, marks) }
@@ -246,6 +274,7 @@ class SpeechPlugin : FlutterPlugin, ActivityAware, MethodChannel.MethodCallHandl
         }
         capture = c
         keepScreenOn(true)
+        volumeKeysForCall(true)
         syncPlaying()
         return "ok"
     }
@@ -293,7 +322,9 @@ class SpeechPlugin : FlutterPlugin, ActivityAware, MethodChannel.MethodCallHandl
 
     @Suppress("DEPRECATION")
     private fun endCall() {
+        CallAudio.active = false
         CallService.stop()
+        volumeKeysForCall(false)
         val c = capture
         capture = null
         c?.stop()

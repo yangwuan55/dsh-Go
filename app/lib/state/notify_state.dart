@@ -217,7 +217,7 @@ class CallCatchUpController extends Notifier<void> {
   }
 
   Future<void> run() async {
-    if (!ref.read(callSettingsProvider.select((s) => s.incomingCall))) return;
+    if (!ref.read(callSettingsProvider.select((s) => s.autoAnswer))) return;
     if (ref.read(localConnectionProvider).hasError) ref.invalidate(localConnectionProvider);
     for (final host in ref.read(catchUpHostsProvider)) {
       ref.read(remoteConnectionProvider(host).notifier).retryIfDown();

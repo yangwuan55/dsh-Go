@@ -7,6 +7,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../l10n/l10n.dart';
+import '../../performance/performance_state.dart';
+import '../../state/android_features.dart' show operatingSystemProvider;
 import '../../state/hosts_state.dart';
 import '../../state/incoming_call_state.dart';
 import '../../state/notify_state.dart' show callCatchUpProvider;
@@ -14,7 +16,6 @@ import '../speech/voice_call_page.dart';
 import '../speech/call/call_parts.dart';
 import '../speech/call/call_visuals.dart';
 import '../theme/app_icons.dart';
-import '../theme/theme.dart';
 
 /// Inserted once inside the home route; draws nothing until a turn rings.
 class IncomingCallHost extends ConsumerStatefulWidget {
@@ -62,6 +63,9 @@ class _IncomingCallLayer extends ConsumerStatefulWidget {
 class _IncomingCallLayerState extends ConsumerState<_IncomingCallLayer> {
   late final IncomingCallController _calls;
 
+  // The ring waits: its orb holds still, only the status dots breathe.
+  final CallScene _scene = CallScene()..appear = 1;
+
   @override
   void initState() {
     super.initState();
@@ -75,6 +79,7 @@ class _IncomingCallLayerState extends ConsumerState<_IncomingCallLayer> {
   @override
   void dispose() {
     _calls.onNativeAnswer = null;
+    _scene.dispose();
     super.dispose();
   }
 
@@ -91,66 +96,109 @@ class _IncomingCallLayerState extends ConsumerState<_IncomingCallLayer> {
     final call = ref.watch(incomingCallProvider);
     if (call == null) return const SizedBox.shrink();
     final l10n = context.l10n;
-    final ink = CallInk.of(context);
+    final theme = Theme.of(context);
+    final dark = theme.brightness == Brightness.dark;
+    final palette = CallPalette.of(theme.colorScheme, light: !dark);
+    final ink = CallInk(dark: dark, child: const SizedBox());
+    final performance = ref.watch(performanceDefaultsProvider);
+    final keyBlur = performance.blur && !performance.lightweight && ref.watch(operatingSystemProvider) != 'ohos';
+    final width = MediaQuery.sizeOf(context).width;
+    final orb = width > 380 ? 300.0 : width * 0.78;
     return Positioned.fill(
       child: Material(
-        color: Colors.black.withValues(alpha: 0.76),
+        color: palette.field,
         child: CallInk(
-          dark: true,
-          child: SafeArea(
-            child: Center(
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 420),
-                child: GlassSurface(
-                  tier: GlassTier.chrome,
-                  borderRadius: AppShape.radiusLg,
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: AppSpace.lg, vertical: AppSpace.xxl),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(AppIcons.call, size: 36, color: ink.fg),
-                        const SizedBox(height: AppSpace.md),
-                        Text(
-                          l10n.stateAlertTurnDone,
-                          style: Theme.of(context).textTheme.headlineSmall,
-                          textAlign: TextAlign.center,
-                        ),
-                        const SizedBox(height: AppSpace.sm),
-                        Text(
-                          call.title,
-                          style: Theme.of(context).textTheme.titleMedium?.copyWith(color: ink.fg),
-                          textAlign: TextAlign.center,
-                        ),
-                        const SizedBox(height: AppSpace.sm),
-                        Text(
-                          l10n.speechCallFooter,
-                          style: Theme.of(context).textTheme.bodySmall?.copyWith(color: ink.dim),
-                          textAlign: TextAlign.center,
-                        ),
-                        const SizedBox(height: AppSpace.xxl),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+          dark: dark,
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              CallField(scene: _scene, palette: palette, center: 0.42),
+              CallEdgeGlow(scene: _scene, palette: palette),
+              SafeArea(
+                child: Column(
+                  children: [
+                    const SizedBox(height: 12),
+                    CallFrosted(
+                      shape: const StadiumBorder(),
+                      blur: keyBlur,
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 14),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
                           children: [
-                            HangUpKey(
-                              icon: AppIcons.hangUp,
-                              label: l10n.speechCallHangUp,
-                              onTap: () => ref.read(incomingCallProvider.notifier).dismiss(),
-                            ),
-                            CallKey(
-                              icon: AppIcons.call,
-                              label: l10n.commonConfirm,
-                              on: true,
-                              onTap: () => _answer(context, ref, call),
+                            Icon(AppIcons.call, size: 18, color: ink.fg),
+                            const SizedBox(width: 10),
+                            ConstrainedBox(
+                              constraints: BoxConstraints(maxWidth: width - 120),
+                              child: Text(
+                                call.title,
+                                key: const ValueKey('call-title'),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: theme.textTheme.titleSmall?.copyWith(
+                                  color: ink.fg,
+                                  fontWeight: FontWeight.w600,
+                                  letterSpacing: 0.2,
+                                ),
+                              ),
                             ),
                           ],
                         ),
+                      ),
+                    ),
+                    Expanded(
+                      child: LayoutBuilder(
+                        builder: (context, box) => Center(
+                          child: Transform.scale(
+                            scale: (box.maxHeight / (orb * 1.04)).clamp(0.56, 1.0),
+                            child: CallLight(scene: _scene, palette: palette, size: orb),
+                          ),
+                        ),
+                      ),
+                    ),
+                    CallStatus(text: l10n.stateAlertTurnDone, dots: true),
+                    const SizedBox(height: 14),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 28),
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 560),
+                        child: Text(
+                          l10n.speechCallFooter,
+                          textAlign: TextAlign.center,
+                          style: theme.textTheme.bodyLarge?.copyWith(
+                            color: ink.fg.withValues(alpha: 0.94),
+                            height: 1.6,
+                            fontSize: 18,
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 26),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        HangUpKey(
+                          key: const ValueKey('call-hang-up'),
+                          icon: AppIcons.hangUp,
+                          label: l10n.speechCallHangUp,
+                          onTap: () => ref.read(incomingCallProvider.notifier).dismiss(),
+                        ),
+                        CallKey(
+                          key: const ValueKey('call-answer'),
+                          icon: AppIcons.call,
+                          label: l10n.commonConfirm,
+                          on: true,
+                          blur: keyBlur,
+                          onTap: () => _answer(context, ref, call),
+                        ),
                       ],
                     ),
-                  ),
+                    const SizedBox(height: 28),
+                  ],
                 ),
               ),
-            ),
+            ],
           ),
         ),
       ),

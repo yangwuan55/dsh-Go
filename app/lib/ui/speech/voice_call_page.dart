@@ -10,7 +10,6 @@
 import 'dart:async';
 import 'dart:io';
 import 'dart:math' as math;
-import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -226,9 +225,7 @@ class _VoiceCallPageState extends ConsumerState<VoiceCallPage> with WidgetsBindi
     // The reply stream is subscribed inside start(): sending before the call
     // listens would leave its report unheard. Same send path as a typed message.
     final prompt = widget.openingPrompt;
-    if (prompt != null && mounted && _call.phase == CallPhase.listening) {
-      unawaited(widget.conversation.send(prompt));
-    }
+    if (prompt != null) unawaited(_call.report(prompt));
     try {
       final chosen = await found;
       if (chosen == null || !mounted || _call.phase == CallPhase.ended) return;
@@ -752,7 +749,7 @@ class _TopBar extends StatelessWidget {
           const SizedBox(width: 10),
           Expanded(
             child: Center(
-              child: _Frosted(
+              child: CallFrosted(
                 blur: blur,
                 shape: const StadiumBorder(),
                 child: Padding(
@@ -800,36 +797,6 @@ class _TopBar extends StatelessWidget {
   }
 }
 
-/// Frosted glass 40 high in [shape]: the call's glass tint and hairline over a
-/// blur of what is behind ([blur], as the performance setting allows).
-class _Frosted extends StatelessWidget {
-  const _Frosted({required this.shape, required this.blur, required this.child, this.width});
-
-  final OutlinedBorder shape;
-  final bool blur;
-  final double? width;
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) {
-    final ink = CallInk.of(context);
-    final glass = Container(
-      width: width,
-      height: 40,
-      decoration: ShapeDecoration(
-        color: ink.glass,
-        shape: shape.copyWith(side: BorderSide(color: ink.glassBorder)),
-      ),
-      child: child,
-    );
-    if (!blur) return glass;
-    return ClipPath(
-      clipper: ShapeBorderClipper(shape: shape),
-      child: BackdropFilter(filter: ui.ImageFilter.blur(sigmaX: 18, sigmaY: 18), child: glass),
-    );
-  }
-}
-
 /// A small round glass key in the top bar; gives a little under the finger.
 class _RoundKey extends StatefulWidget {
   const _RoundKey({super.key, required this.icon, required this.label, required this.blur, required this.onTap});
@@ -869,7 +836,7 @@ class _RoundKeyState extends State<_RoundKey> {
           scale: _down ? 0.9 : 1,
           duration: AppMotion.of(context, _down ? AppMotion.press : AppMotion.standard),
           curve: _down ? Curves.easeOut : Curves.easeOutBack,
-          child: _Frosted(
+          child: CallFrosted(
             width: 40,
             shape: const CircleBorder(),
             blur: widget.blur,

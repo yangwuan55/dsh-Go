@@ -19883,6 +19883,32 @@ class L10nEn extends L10n {
       'In a call, pause after you speak and it is sent; the answer is read while it is written.';
 
   @override
+  String get speechCallAutoAnswer => 'Call when a task finishes';
+
+  @override
+  String get speechCallAutoAnswerHint =>
+      'Rings your phone when a task finishes. You answer the call yourself; the app never picks up. Off means no call.';
+
+  @override
+  String get speechCallAutoMode => 'Call reminder hours';
+
+  @override
+  String get speechCallAutoModeAlways => 'All day';
+
+  @override
+  String get speechCallAutoModeWindow => 'Set hours';
+
+  @override
+  String get speechCallAutoStart => 'Start time';
+
+  @override
+  String get speechCallAutoEnd => 'End time';
+
+  @override
+  String get speechCallAutoWindowHint =>
+      'An end before the start runs past midnight, e.g. 22:00–08:00. The same time means no call.';
+
+  @override
   String get speechCallBargeIn => 'Interrupt by speaking';
 
   @override

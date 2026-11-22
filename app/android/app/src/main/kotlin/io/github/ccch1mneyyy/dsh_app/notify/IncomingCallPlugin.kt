@@ -7,9 +7,9 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
-import android.provider.Settings
 import android.os.Handler
 import android.os.Looper
+import android.provider.Settings
 import io.flutter.embedding.engine.plugins.FlutterPlugin
 import io.flutter.plugin.common.BinaryMessenger
 import io.flutter.plugin.common.MethodCall
@@ -46,26 +46,30 @@ class IncomingCallPlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
                     result.error("foreground_start_failed", "Android refused the foreground service", null)
                     return
                 }
+                DshConnectionService.register(ctx)
+                if (DshConnectionService.needsAccountEnable(ctx)) DshConnectionService.openAccountSettings(ctx)
                 requestCallPermissions()
                 result.success(null)
             }
             "show" -> {
-                val shown = IncomingCallService.alert(
+                val shown = DshConnectionService.alert(
                     ctx,
                     call.argument<String>("title").orEmpty(),
                     call.argument<String>("sessionId").orEmpty(),
                 )
                 if (shown) result.success(null)
-                else result.error("call_show_failed", "Android refused the incoming call notification", null)
+                else result.error("call_show_failed", "Android refused the Telecom incoming call", null)
+            }
+            "answered" -> {
+                DshConnectionService.answerFromDart()
+                result.success(null)
             }
             "dismiss" -> {
-                IncomingCallService.cancelAlert(ctx)
-                IncomingCallActivity.finishFromDart()
+                DshConnectionService.endFromDart()
                 result.success(null)
             }
             "disable" -> {
-                IncomingCallService.cancelAlert(ctx)
-                IncomingCallActivity.finishFromDart()
+                DshConnectionService.endFromDart()
                 IncomingCallService.ensure(ctx, false)
                 result.success(null)
             }
@@ -73,7 +77,7 @@ class IncomingCallPlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
         }
     }
 
-    /** Notifications on 13+, and on 14+ the full-screen intent the lock-screen page needs. */
+    /** Missed-call notifications still come from Dart's notify channel. */
     private fun requestCallPermissions() {
         val activity = MainActivity.current?.get() ?: return
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&

@@ -216,6 +216,24 @@ class VoiceCallController extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// The opening report has no words to recognize, but its reply is still a turn.
+  Future<bool> report(String text) async {
+    // A word spoken while the page opens may have moved the phase to hearing already.
+    if (_phase != CallPhase.listening && _phase != CallPhase.hearing) return false;
+    _replyDone = false;
+    _cued = false;
+    _cueTimer?.cancel();
+    _cueTimer = Timer(cueAfter, _cue);
+    _set(CallPhase.thinking);
+    final sent = await conversation.send(text);
+    if (!sent && _phase != CallPhase.ended) {
+      _replyDone = true;
+      _error = const CallSendFailed();
+      _set(CallPhase.listening);
+    }
+    return sent;
+  }
+
   /// The reply being read (so far).
   String get reply => _reply;
 

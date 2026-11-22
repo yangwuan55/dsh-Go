@@ -108,6 +108,14 @@ void main() {
     expect(withoutAppNotes(conversation.sent.single), prompt);
   });
 
+  testWidgets('the handover report waits as thinking, not listening', (tester) async {
+    const prompt = '请简要汇报你刚才完成的工作：做了什么、结果如何、有没有需要我确认或接手的事项。';
+    final (_, conversation) = await pumpCall(tester, prompt: prompt);
+    expect(conversation.sent, hasLength(1));
+    expect(find.text('想一想'), findsOneWidget, reason: 'the report is a turn, so the page waits for the reply');
+    expect(find.text('在听'), findsNothing);
+  });
+
   testWidgets('a turn on the page: heard, sent, the reply arriving; hang up closes it', (tester) async {
     final (audio, conversation) = await pumpCall(tester);
     expect(find.text('周末去哪儿玩'), findsOneWidget);

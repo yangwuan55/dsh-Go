@@ -5,7 +5,7 @@ import { BusinessError } from '@ohos.base';
 import { loadNativeHost } from '../runtime/NativeHost';
 import { RuntimePaths } from '../runtime/RuntimePaths';
 import {
-  ShareError, ShareRequest, SHARE_OUT_MAX_BYTES, safeShareName
+  ShareError, ShareRequest, safeShareName
 } from './HmsSharePolicy';
 
 export class ShareBatch {
@@ -92,13 +92,12 @@ export class HmsShareStorage {
     throw new ShareError('outside_workspace', '请先把文件保存到本机工作区或应用缓存后分享。');
   }
 
-  async copy(input: number, batch: ShareBatch, name: string, limit: number, active: () => void): Promise<number> {
+  async copy(input: number, batch: ShareBatch, name: string, active: () => void): Promise<number> {
     active();
     const before = await fs.stat(input);
     if (!before.isFile() || !Number.isSafeInteger(before.size) || before.size < 0) {
       throw new ShareError('unreadable', '这个项目不是可读取的普通文件。');
     }
-    if (before.size > limit) throw new ShareError('too_large', '文件超过本次分享的大小限制。');
     const target = batch.directory + '/' + batch.paths.length.toString() + '-' + safeShareName(name);
     batch.paths.push(target);
     let complete = false;
@@ -140,12 +139,11 @@ export class HmsShareStorage {
     const batch = await this.create(true);
     let complete = false;
     try {
-      let total = 0;
       for (const path of request.paths) {
         active();
         const fd = await this.openLocal(path, context, active);
         try {
-          total += await this.copy(fd, batch, path.substring(path.lastIndexOf('/') + 1), SHARE_OUT_MAX_BYTES - total, active);
+          await this.copy(fd, batch, path.substring(path.lastIndexOf('/') + 1), active);
         } finally { await fs.close(fd); }
       }
       active(); complete = true;

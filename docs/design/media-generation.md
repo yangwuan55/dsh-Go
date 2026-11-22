@@ -65,7 +65,7 @@ App 侧真正缺的有四样：
 | 工具结果里的图片 | `ToolView.images` 取结果里的 `ImagePart`（手机截图、`read_image` 都走这里），缩略图高 144，一张占满宽、多张两列，间距 8。**只在展开工具行的详情里显示** | `app/lib/ui/chat/tool_view.dart:243-255`；`app/lib/ui/chat/widgets/tool_images.dart:14-51` |
 | 插件工具卡 | `meta["dsh-go/view"]` → 原生卡片，默认展开，一轮折叠后卡片留在折叠外面。`image` 组件只收插件资源或 ≤ 64 KiB 的 `data:`，工具卡总预算 8 KiB，**放不下一张生成图** | `native-plugins-views.md` §2.2、§5、§8.3 |
 | 产物 | 有 `ArtifactKind.video` 和图标、MIME 表，但预览页没有视频播放。`pubspec.yaml` 里没有任何视频播放依赖 | `app/lib/state/artifacts.dart:17-58`；`app/lib/ui/chat/widgets/artifact_card.dart:388` |
-| 远程读文件 | `workspaceFiles/stat` + `workspaceFiles/readBytes` 分块读取，**所有通道都能用**（中转走 base64）。单个产物上限 300 MiB，缩略图上限 8 MiB | `packages/dsh_client/lib/src/files_api.dart:1-13`；`app/lib/state/artifact_files.dart:19-22` |
+| 远程读文件 | `workspaceFiles/stat` + `workspaceFiles/readBytes` 分块读取，**所有通道都能用**（中转走 base64）。产物下载没有单文件大小上限，字节边下边写盘；缩略图上限 8 MiB | `packages/dsh_client/lib/src/files_api.dart:1-13`；`app/lib/state/artifact_files.dart` |
 | 全屏看图 | 黑底，左上返回 + 标题，右上「保存到相册」，双指缩放到 8 倍。一次只看一张，不能左右滑 | `app/lib/ui/chat/artifact_preview.dart:1372-1487` |
 | 保存到相册 | `dsh/media` 的 `saveImage {bytes, name, mime}` 写进 `Pictures/DSH Go`，只收 png / jpeg / gif / webp，**字节整块走 MethodChannel**。文件图片按原字节保存，不重新编码 | `MediaPlugin.kt:27-40,214-233`；`app/lib/media/gallery.dart:101-125` |
 | 保存到下载 | `dsh/files` 的 `saveToDownloads {path, name, mime}` 按路径走 MediaStore Downloads，任何类型都行 | `FilesPlugin.kt:32-49` |
@@ -1007,7 +1007,7 @@ n = 4：2 × 2
 | **不自动上传照片** | App 从不自动附图。插件只接受三类参考图，在主机上校验，模型说什么都不改变这条：①用户在本对话里亲手附的图；②本插件生成过的文件（查索引）；③其他文件（手机截图、工作区里的图），每次走审批卡「把 screenshot.png 发送给火山方舟？」 | 〔推断〕。防的是提示注入：网页里一句话让 Agent 把私人截图发出去 |
 | **提示注入造成的花费** | 网页、文件里的指令可能让 Agent 连着生成一堆视频。三道闸：每日上限、对话入口的视频要审批、一次最多 4 张 | §5.5 |
 | **描述和索引的隐私** | 描述只发给用户选的服务商。作品索引只在主机上。诊断包不带索引、不带描述，也不带插件设置里的密钥 | 〔推断〕 |
-| **存储** | 主机：不自动删，「占用空间」页可以按月删。App：远程作品的缓存按 LRU 封顶（建议 1 GB；缩略图另算 200 MB），和产物缓存分开。单个视频上限沿用产物的 300 MiB。本机引擎的作品在运行环境里，「重置运行环境」会删掉没存到相册的作品，重置确认里要多列一项「作品」 | `artifact_files.dart:19-22`〔源码〕；重置的保留项见 settings-ia §1.5 |
+| **存储** | 主机：不自动删，「占用空间」页可以按月删。App：远程作品的缓存按 LRU 封顶（建议 1 GB；缩略图另算 200 MB），和产物缓存分开。视频下载也不再套单文件大小上限。本机引擎的作品在运行环境里，「重置运行环境」会删掉没存到相册的作品，重置确认里要多列一项「作品」 | `artifact_files.dart:19-22`〔源码〕；重置的保留项见 settings-ia §1.5 |
 | **服务商的临时地址** | 主机上拿到就下载，记录里不写地址（§2.3）。BFL 的地址 10 分钟过期，所以下载必须在同一次调用里完成 | 附录 A（V） |
 
 ## 7. 实现拆分

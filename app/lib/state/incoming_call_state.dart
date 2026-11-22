@@ -10,7 +10,7 @@ import '../notify/notify_channel.dart';
 import '../speech/speech_settings.dart';
 import 'hosts_state.dart';
 import 'incoming_call_bridge.dart';
-import 'notify_state.dart' show callChatProvider, notifyChannelProvider;
+import 'notify_state.dart' show appForegroundProvider, callChatProvider, notifyChannelProvider;
 
 class IncomingCall {
   const IncomingCall({required this.host, required this.sessionId, required this.title});
@@ -31,8 +31,11 @@ class IncomingCallController extends Notifier<IncomingCall?> {
   IncomingCall? build() {
     final bridge = ref.read(incomingCallBridgeProvider);
     bridge.onSignal = nativeSignal;
+    bridge.onDebugOffer = (title, sessionId) => unawaited(
+          offer(IncomingCall(host: HostRef.local, sessionId: sessionId, title: title)),
+        );
     // Changing the switch retires a prompt still on screen and its native page.
-    ref.listen(callSettingsProvider.select((s) => s.incomingCall), (was, on) {
+    ref.listen(callSettingsProvider.select((s) => s.autoAnswer), (was, on) {
       if (on && was != true) unawaited(bridge.prepare());
       if (!on && was == true) {
         unawaited(bridge.dismiss());
@@ -40,18 +43,21 @@ class IncomingCallController extends Notifier<IncomingCall?> {
         _queue.clear();
       }
     });
-    // ChatCallConversation clears this when the call page closes: that is the
-    // end of the call, not the end of the ringing prompt.
+    // ChatCallConversation clears this when the call page closes: that ends
+    // the answered telecom call, then lets the next queued turn ring.
     ref.listen(callChatProvider, (_, live) {
-      if (live == null) unawaited(_presentNext());
+      if (live == null) {
+        unawaited(bridge.dismiss());
+        unawaited(_presentNext());
+      }
     });
-    if (ref.read(callSettingsProvider.select((s) => s.incomingCall))) unawaited(bridge.prepare());
+    if (ref.read(callSettingsProvider.select((s) => s.autoAnswer))) unawaited(bridge.prepare());
     return null;
   }
 
   Future<void> offer(IncomingCall call) async {
     final settings = await ref.read(callSettingsProvider.notifier).ready();
-    if (!ref.mounted || !settings.incomingCall) return;
+    if (!ref.mounted || !callOffered(settings, DateTime.now()) || ref.read(appForegroundProvider)) return;
     if (state != null || ref.read(callChatProvider) != null) {
       if (_queue.length >= _maxQueued) _queue.removeAt(0);
       _queue.add(call);
@@ -69,6 +75,11 @@ class IncomingCallController extends Notifier<IncomingCall?> {
   /// One at a time: neither a prompt on screen nor a live call is interrupted.
   Future<void> _presentNext() async {
     if (_queue.isEmpty || state != null || !ref.mounted || ref.read(callChatProvider) != null) return;
+    // A turn queued in the background was already notified; don't ring it once the app is on screen.
+    if (ref.read(appForegroundProvider)) {
+      _queue.clear();
+      return;
+    }
     await _ring(_queue.removeAt(0));
   }
 
@@ -105,7 +116,7 @@ class IncomingCallController extends Notifier<IncomingCall?> {
       // gap must still queue. openChatCall clears it when the call closes.
       ref.read(callChatProvider.notifier).set((host: call.host, sessionId: call.sessionId));
     }
-    unawaited(ref.read(incomingCallBridgeProvider).dismiss());
+    unawaited(ref.read(incomingCallBridgeProvider).answered());
     return call;
   }
 

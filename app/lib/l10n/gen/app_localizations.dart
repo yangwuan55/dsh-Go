@@ -34592,6 +34592,54 @@ abstract class L10n {
   /// **'通话时说完一句停一下，就会发出去；回答边写边读。'**
   String get speechCallFooter;
 
+  /// No description provided for @speechCallAutoAnswer.
+  ///
+  /// In zh, this message translates to:
+  /// **'任务完成时来电'**
+  String get speechCallAutoAnswer;
+
+  /// No description provided for @speechCallAutoAnswerHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'任务完成时给手机来电提醒。来电页由你接听或拒绝，App 不会自动接通；关闭则不来电话。'**
+  String get speechCallAutoAnswerHint;
+
+  /// No description provided for @speechCallAutoMode.
+  ///
+  /// In zh, this message translates to:
+  /// **'来电提醒时间'**
+  String get speechCallAutoMode;
+
+  /// No description provided for @speechCallAutoModeAlways.
+  ///
+  /// In zh, this message translates to:
+  /// **'全天'**
+  String get speechCallAutoModeAlways;
+
+  /// No description provided for @speechCallAutoModeWindow.
+  ///
+  /// In zh, this message translates to:
+  /// **'仅时段内'**
+  String get speechCallAutoModeWindow;
+
+  /// No description provided for @speechCallAutoStart.
+  ///
+  /// In zh, this message translates to:
+  /// **'开始时间'**
+  String get speechCallAutoStart;
+
+  /// No description provided for @speechCallAutoEnd.
+  ///
+  /// In zh, this message translates to:
+  /// **'结束时间'**
+  String get speechCallAutoEnd;
+
+  /// No description provided for @speechCallAutoWindowHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'结束早于开始表示跨午夜，例如 22:00–08:00；两者相同则不来电提醒。'**
+  String get speechCallAutoWindowHint;
+
   /// No description provided for @speechCallBargeIn.
   ///
   /// In zh, this message translates to:
