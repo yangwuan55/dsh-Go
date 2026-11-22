@@ -190,6 +190,7 @@ class _IncomingCallLayerState extends ConsumerState<_IncomingCallLayer> {
                           label: l10n.commonConfirm,
                           on: true,
                           blur: keyBlur,
+                          size: 74,
                           onTap: () => _answer(context, ref, call),
                         ),
                       ],

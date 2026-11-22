@@ -47,6 +47,11 @@ void main() {
     expect(find.byType(CallFrosted), findsWidgets, reason: 'the title wears the call page frosted glass');
     expect(find.byType(CallKey), findsOneWidget);
     expect(find.byType(HangUpKey), findsOneWidget);
+    expect(
+      tester.widget<CallKey>(find.byType(CallKey)).size,
+      tester.widget<HangUpKey>(find.byType(HangUpKey)).size,
+      reason: 'answer and hang-up must look like a matched pair on the ring',
+    );
     expect(find.text('修复登录按钮'), findsOneWidget);
     expect(find.bySemanticsLabel(appL10n.speechCallHangUp), findsOneWidget);
     expect(find.bySemanticsLabel(appL10n.commonConfirm), findsOneWidget);
