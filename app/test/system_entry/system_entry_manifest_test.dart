@@ -95,6 +95,15 @@ void main() {
     expect(tile, contains('android:label="@string/tile_new_chat"'));
   });
 
+  test('voice calls may switch the communication device between speaker and earpiece', () {
+    final audio = RegExp(
+      r'<uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS"[^>]*/>',
+    ).firstMatch(_manifest);
+    // SpeechPlugin.route() needs this permission on every Android version: without it the OS
+    // refuses setCommunicationDevice() and the isSpeakerphoneOn setter, leaving the earpiece.
+    expect(audio?.group(0), '<uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />');
+  });
+
   test('MainActivity registers both plugins', () {
     final source = File('android/app/src/main/kotlin/io/github/ccch1mneyyy/dsh_app/MainActivity.kt').readAsStringSync();
     expect(source, contains('engine.plugins.add(SharePlugin())'));
