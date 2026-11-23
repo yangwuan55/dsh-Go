@@ -10,6 +10,7 @@ import 'package:dsh_app/speech/voice_cloud.dart';
 import 'package:dsh_app/state/app_notes.dart';
 import 'package:dsh_app/state/hosts_state.dart' show HostRef, activeHostProvider;
 import 'package:dsh_app/state/notify_state.dart' show callChatProvider;
+import 'package:dsh_app/state/sessions_state.dart' show currentSessionProvider;
 import 'package:dsh_app/state/voice_state.dart';
 import 'package:dsh_app/ui/speech/call/call_backdrop.dart';
 import 'package:dsh_app/ui/speech/call/call_parts.dart';
@@ -28,6 +29,18 @@ import '../chat/support/harness.dart';
 import '../phone/support.dart' show FixedActiveHost;
 import 'speech_fakes.dart';
 
+class _OrderedAudio extends FakeAudio {
+  _OrderedAudio(this.order);
+
+  final List<String> order;
+
+  @override
+  Future<CallStart> startCall({required bool bargeIn, CallPause pause = CallPause.normal}) async {
+    order.add('callStart');
+    return super.startCall(bargeIn: bargeIn, pause: pause);
+  }
+}
+
 void main() {
   setUp(() => SharedPreferences.setMockInitialValues({}));
 
@@ -41,11 +54,12 @@ void main() {
     String? prompt,
     Future<VoiceCloud?> Function()? recognizer,
     bool placeTelecomCall = true,
+    FakeAudio? fakeAudio,
   }) async {
     tester.view.physicalSize = const Size(1170, 2532);
     tester.view.devicePixelRatio = 3;
     addTearDown(tester.view.reset);
-    final audio = FakeAudio();
+    final audio = fakeAudio ?? FakeAudio();
     final conversation = FakeConversation();
     await tester.pumpWidget(
       testApp(
@@ -111,6 +125,85 @@ void main() {
         reason: 'an outgoing call must get the system call state');
     expect(methods.lastIndexOf('endOutgoing'), greaterThan(methods.indexOf('placeCall')),
         reason: 'telecom must let go of the audio route once the speech call is up');
+  });
+
+  testWidgets('telecom hands the audio route back before the microphone opens', (tester) async {
+    const channel = MethodChannel('dsh/incoming_call');
+    final order = <String>[];
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, (call) async {
+      order.add(call.method);
+      return null;
+    });
+    addTearDown(() => TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, null));
+
+    await pumpCall(tester, fakeAudio: _OrderedAudio(order));
+
+    expect(order, contains('placeCall'));
+    expect(order, contains('endOutgoing'));
+    expect(order.indexOf('endOutgoing'), lessThan(order.indexOf('callStart')),
+        reason: 'a telecom call active while CallCapture opens the mic can break recognition');
+  });
+
+  testWidgets('a refused telecom call still opens the microphone', (tester) async {
+    const channel = MethodChannel('dsh/incoming_call');
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, (call) async {
+      if (call.method == 'placeCall') throw PlatformException(code: 'telecom_refused');
+      return null;
+    });
+    addTearDown(() => TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, null));
+
+    final audio = FakeAudio();
+    await pumpCall(tester, fakeAudio: audio);
+
+    expect(audio.calls.any((c) => c.startsWith('callStart:')), isTrue,
+        reason: 'a borrowed system call state must never be a prerequisite for the speech call');
+  });
+
+  testWidgets('a call page disposed while telecom releases never starts', (tester) async {
+    const channel = MethodChannel('dsh/incoming_call');
+    const paths = MethodChannel('plugins.flutter.io/path_provider');
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(paths, (call) async => '/tmp/dsh-voice-test');
+    addTearDown(() => TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(paths, null));
+    const diagnostics = MethodChannel('dsh/diagnostics');
+    final stages = <String>[];
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(diagnostics, (call) {
+      if (call.method == 'recordVoiceStage') stages.add((call.arguments as Map)['stage'] as String);
+      return Future<void>.value();
+    });
+    addTearDown(() => TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(diagnostics, null));
+    final release = Completer<void>();
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, (call) async {
+      if (call.method == 'endOutgoing') return release.future;
+      return Future<void>.value();
+    });
+    addTearDown(() => TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, null));
+
+    final audio = FakeAudio();
+    await pumpCall(tester, fakeAudio: audio);
+    Navigator.of(tester.element(find.byType(VoiceCallPage))).pop();
+    for (var i = 0; i < 20; i++) {
+      await tester.pump(const Duration(milliseconds: 60));
+    }
+    expect(find.byType(VoiceCallPage), findsNothing);
+
+    release.complete();
+    await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 20)));
+    await tester.pump(const Duration(milliseconds: 100));
+
+    expect(audio.calls, isNot(contains(startsWith('callStart:'))),
+        reason: 'a disposed page must not start capture after a suspended telecom call returns');
+    expect(stages, isNot(contains('call_started')),
+        reason: 'a disposed page must not start the call and leave its listeners behind');
   });
 
   testWidgets('an answered incoming call does not take a second telecom call', (tester) async {
@@ -517,6 +610,64 @@ void main() {
     await tester.pump();
     expect(audio.calls, isNot(contains('callStop')));
     tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+  });
+
+  testWidgets('returning to the app brings a covered call back to the front', (tester) async {
+    addTearDown(() => tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed));
+    await pumpCall(tester, placeTelecomCall: false);
+    // The push future waits for its transition: pump frames while it runs.
+    Navigator.of(tester.element(find.byType(VoiceCallPage))).push(
+      MaterialPageRoute<void>(builder: (_) => const Scaffold(body: Center(child: Text('别的页')))),
+    );
+    for (var i = 0; i < 10; i++) {
+      await tester.pump(const Duration(milliseconds: 60));
+    }
+    expect(find.text('别的页'), findsOneWidget);
+
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    for (var i = 0; i < 10; i++) {
+      await tester.pump(const Duration(milliseconds: 60));
+    }
+
+    expect(find.text('别的页'), findsNothing,
+        reason: 'a route opened by a notification or another app must not leave the live call hidden');
+    expect(find.byType(VoiceCallPage), findsOneWidget);
+  });
+
+  testWidgets('hanging up returns to the conversation the call was in', (tester) async {
+    await pumpCall(tester, placeTelecomCall: false);
+    final container = ProviderScope.containerOf(tester.element(find.byType(VoiceCallPage)));
+    container.read(activeHostProvider.notifier).select(HostRef.ssh('lab'));
+    container.read(callChatProvider.notifier).set((host: HostRef.local, sessionId: 'call-session'));
+
+    await tester.tap(find.byKey(const ValueKey('call-hang-up')));
+    for (var i = 0; i < 20; i++) {
+      await tester.pump(const Duration(milliseconds: 60));
+    }
+
+    expect(find.byType(VoiceCallPage), findsNothing);
+    expect(container.read(activeHostProvider), HostRef.local,
+        reason: 'the call belongs to its original host even if another was opened meanwhile');
+    expect(container.read(currentSessionProvider), 'call-session',
+        reason: 'closing a call must land on its own conversation, wherever it was opened from');
+    expect(find.text('open'), findsOneWidget);
+  });
+
+  testWidgets('a call ending before it reached a conversation leaves the chat alone', (tester) async {
+    await pumpCall(tester, placeTelecomCall: false);
+    final container = ProviderScope.containerOf(tester.element(find.byType(VoiceCallPage)));
+    container.read(currentSessionProvider.notifier).select('original');
+    container.read(callChatProvider.notifier).set((host: HostRef.ssh('lab'), sessionId: ''));
+
+    await tester.tap(find.byKey(const ValueKey('call-hang-up')));
+    for (var i = 0; i < 20; i++) {
+      await tester.pump(const Duration(milliseconds: 60));
+    }
+
+    expect(find.byType(VoiceCallPage), findsNothing);
+    expect(container.read(currentSessionProvider), 'original',
+        reason: 'a failed call with no conversation must not drop the person into a new chat');
+    expect(container.read(activeHostProvider), HostRef.local);
   });
 
   testWidgets('without a background microphone lease, going away ends the call', (tester) async {

@@ -41,7 +41,7 @@ class IncomingCallBridge {
 
   Future<void> show(String title, String sessionId) => _send('show', {'title': title, 'sessionId': sessionId});
 
-  /// A voice call borrows Telecom's call state until its own audio is up.
+  /// A voice call borrows Telecom's call state, then hands the audio back before capture.
   Future<void> placeCall(String title) => _send('placeCall', {'title': title});
 
   /// The borrowed call is released without touching an incoming ring.

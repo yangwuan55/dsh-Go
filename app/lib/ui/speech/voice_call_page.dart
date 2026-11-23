@@ -34,6 +34,7 @@ import '../../state/app_notes.dart';
 import '../../state/hosts_state.dart' show HostKind, activeHostProvider;
 import '../../state/incoming_call_bridge.dart';
 import '../../state/notify_state.dart';
+import '../../state/sessions_state.dart' show currentSessionProvider;
 import '../../state/voice_settings.dart';
 import '../../state/voice_state.dart';
 import '../chat/voice/voice_bridge.dart';
@@ -54,12 +55,16 @@ import 'call/call_transcript.dart';
 import 'call/call_visuals.dart';
 import 'speech_ui.dart';
 
+/// The call page's route: other UI brings a covered call back by name.
+const voiceCallRoute = 'dsh-voice-call';
+
 /// Opens a call with the main chat's conversation. [session] gives its id,
 /// creating it for a new chat; [title] heads the page.
 Future<void> openChatCall(
   BuildContext context, {
   required String title,
   required Future<String?> Function() session,
+  String? sessionId,
   String? openingPrompt,
   bool placeTelecomCall = true,
 }) async {
@@ -67,9 +72,10 @@ Future<void> openChatCall(
   container.read(readAloudProvider.notifier).stop();
   final conversation = ChatCallConversation(container, session);
   // Claim the chat now, before the first message: turns arriving during setup queue.
-  container.read(callChatProvider.notifier).set((host: container.read(activeHostProvider), sessionId: ''));
+  container.read(callChatProvider.notifier).set((host: container.read(activeHostProvider), sessionId: sessionId ?? ''));
   await Navigator.of(context).push(
     PageRouteBuilder<void>(
+      settings: const RouteSettings(name: voiceCallRoute),
       opaque: true,
       fullscreenDialog: true,
       transitionDuration: AppMotion.of(context, const Duration(milliseconds: 520)),
@@ -242,13 +248,19 @@ class _VoiceCallPageState extends ConsumerState<VoiceCallPage> with WidgetsBindi
     final found = liveWordsModel(ref);
     _callConnect = ref.read(usageStatsProvider.notifier).beginOperation(UsageOperation.callConnect);
     final bridge = ref.read(incomingCallBridgeProvider);
-    try {
-      if (widget.placeTelecomCall) unawaited(bridge.placeCall(widget.title));
-      await _call.start();
-    } finally {
-      // Telecom's privileged route must not outlive the setup: SpeechPlugin owns the audio.
-      if (widget.placeTelecomCall) unawaited(bridge.endOutgoing());
+    if (widget.placeTelecomCall) {
+      // Telecom is optional: a refusal must not keep the microphone from opening.
+      await bridge.placeCall(widget.title).catchError(
+        (Object e) => debugPrint('Voice call: Telecom placeCall failed: $e'),
+      );
+      // Its privileged earpiece route must be gone before CallCapture opens the mic.
+      await bridge.endOutgoing().catchError(
+        (Object e) => debugPrint('Voice call: Telecom endOutgoing failed: $e'),
+      );
     }
+    // The channel call may have outlived the page: a disposed call cannot start.
+    if (!mounted) return;
+    await _call.start();
     // The reply stream is subscribed inside start(): sending before the call
     // listens would leave its report unheard. Same send path as a typed message.
     final prompt = widget.openingPrompt;
@@ -309,7 +321,15 @@ class _VoiceCallPageState extends ConsumerState<VoiceCallPage> with WidgetsBindi
           if (route == null || !route.isActive) return;
           final navigator = Navigator.of(context);
           if (!route.isCurrent) navigator.popUntil((r) => r == route);
-          unawaited(navigator.maybePop());
+          final target = ref.read(callChatProvider);
+          if (target != null && target.sessionId.isNotEmpty) {
+            ref.read(activeHostProvider.notifier).select(target.host);
+            ref.read(currentSessionProvider.notifier).select(target.sessionId);
+            navigator.popUntil((r) => r.isFirst);
+          } else {
+            // No conversation was reached (an early failure): keep the page underneath.
+            unawaited(navigator.maybePop());
+          }
         },
       );
     }
@@ -369,6 +389,12 @@ class _VoiceCallPageState extends ConsumerState<VoiceCallPage> with WidgetsBindi
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      // Coming back from another app or a notification must not leave a route over the call.
+      final route = ModalRoute.of(context);
+      if (route != null && route.isActive && !route.isCurrent) Navigator.of(context).popUntil((r) => r == route);
+      return;
+    }
     if (state != AppLifecycleState.paused && state != AppLifecycleState.hidden) return;
     // Android's microphone foreground service (speech/CallService.kt) keeps the call alive behind
     // another app and with the screen locked. Without that lease the microphone goes silent, so

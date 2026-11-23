@@ -14,8 +14,16 @@ import '../../state/hosts_state.dart';
 import '../../state/notify_state.dart';
 import '../bots/bot_alerts.dart';
 import '../common/discard_guard.dart';
+import '../speech/voice_call_page.dart' show voiceCallRoute;
 import '../theme/app_icons.dart';
 import '../theme/theme.dart';
+
+/// A notification or banner must not pull the person off a live call.
+bool _revealCall(BuildContext context, WidgetRef ref) {
+  if (ref.read(callChatProvider) == null) return false;
+  Navigator.of(context, rootNavigator: true).popUntil((route) => route.isFirst || route.settings.name == voiceCallRoute);
+  return true;
+}
 
 /// Put it once inside the home route (the home shell does). It keeps the
 /// alert controller alive, feeds it the app lifecycle and whether the chat is
@@ -85,6 +93,7 @@ class _ChatAlertHostState extends ConsumerState<ChatAlertHost> {
   }
 
   Future<void> _onTap(NotifyTap tap) async {
+    if (_revealCall(context, ref)) return;
     if (!mounted || !await DiscardGuard.confirmLeave(context) || !mounted) return;
     widget.onReveal?.call(false);
     // A Bot or group chat notification opens that chat.
@@ -148,6 +157,7 @@ class _AlertBannerLayerState extends ConsumerState<AlertBannerLayer> {
   }
 
   Future<void> _open(ChatAlert alert) async {
+    if (_revealCall(context, ref)) return;
     if (!await DiscardGuard.confirmLeave(context) || !mounted) return;
     HapticFeedback.selectionClick();
     final alerts = ref.read(chatAlertsProvider.notifier);

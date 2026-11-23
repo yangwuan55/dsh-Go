@@ -1513,6 +1513,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> with WidgetsBindingObse
       openChatCall(
         context,
         title: title,
+        sessionId: sessionId,
         session: () async {
           // Another host now: its conversation of the same id is not this call's.
           if (!mounted || ref.read(activeHostProvider) != host) return null;

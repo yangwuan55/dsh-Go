@@ -12,6 +12,7 @@ import 'package:dsh_app/state/workspaces_state.dart';
 import 'package:dsh_app/ui/common/discard_guard.dart';
 import 'package:dsh_app/ui/notify/chat_alert_host.dart';
 import 'package:dsh_app/ui/shell/home_shell.dart';
+import 'package:dsh_app/ui/speech/voice_call_page.dart' show voiceCallRoute;
 import 'package:dsh_app/ui/shell/sessions_drawer.dart';
 import 'package:dsh_client/dsh_client.dart';
 import 'package:flutter/material.dart';
@@ -131,6 +132,29 @@ void main() {
     expect(find.text('设置页'), findsNothing);
     expect(container.read(currentSessionProvider), 's2');
     expect(container.read(activeHostProvider), HostRef.local);
+  });
+
+  testWidgets('a notification tap during a call returns to the call, not the tapped chat', (tester) async {
+    final container = await pumpHome(tester);
+    await openPage(tester);
+    final navigator = Navigator.of(tester.element(find.text('设置页')), rootNavigator: true);
+    navigator.push(
+      MaterialPageRoute<void>(
+        settings: const RouteSettings(name: voiceCallRoute),
+        builder: (_) => const Scaffold(body: Center(child: Text('通话页'))),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('通话页'), findsOneWidget);
+    container.read(callChatProvider.notifier).set((host: HostRef.local, sessionId: 's-call'));
+
+    channel.tapController.add(const NotifyTap(host: HostRef.local, sessionId: 's2', kind: 'done'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('通话页'), findsOneWidget,
+        reason: 'a notification must not pop the live call page off the route stack');
+    expect(find.text('设置页'), findsNothing);
+    expect(container.read(currentSessionProvider), isNot('s2'));
   });
 
   testWidgets('the banner shows over a pushed page and opens its conversation', (tester) async {

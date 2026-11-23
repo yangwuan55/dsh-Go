@@ -214,6 +214,7 @@ class _IncomingCallLayerState extends ConsumerState<_IncomingCallLayer> {
       openChatCall(
         context,
         title: call.title,
+        sessionId: call.sessionId,
         session: () async => ref.read(activeHostProvider) == call.host ? call.sessionId : null,
         openingPrompt: appL10n.stateIncomingCallReportPrompt,
         placeTelecomCall: false,
