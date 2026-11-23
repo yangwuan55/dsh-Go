@@ -441,6 +441,7 @@ class HostAlertTracker {
     required this.onAlert,
     required this.onWithdraw,
     required this.onSessionGone,
+    this.onSessionActive,
     this.skipApproval,
     this.onReannounce,
     this.onRequestEpochChanged,
@@ -459,6 +460,9 @@ class HostAlertTracker {
   /// A request alert is moot: answered, withdrawn, or gone after a reconnect.
   final void Function(HostRef host, String sessionId, String key) onWithdraw;
   final void Function(HostRef host, String sessionId) onSessionGone;
+
+  /// A turn started in this conversation, by this or another client.
+  final void Function(HostRef host, String sessionId)? onSessionActive;
 
   /// True when this device answers [sessionId]'s approvals by itself
   /// (「本对话都允许」): no alert for those.
@@ -655,6 +659,7 @@ class HostAlertTracker {
         final session = _requests.remove(eventId);
         if (session != null) onWithdraw(host, session, eventId);
       case SessionStatusEvent(:final sessionId, :final running):
+        if (running) onSessionActive?.call(host, sessionId);
         final was = _running[sessionId];
         final wasLive = provenance != null && identical(_companionRunning[sessionId], provenance.generation);
         if (running && provenance != null) _companionRunning[sessionId] = provenance.generation;

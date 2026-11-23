@@ -10,7 +10,7 @@ import '../notify/notify_channel.dart';
 import '../speech/speech_settings.dart';
 import 'hosts_state.dart';
 import 'incoming_call_bridge.dart';
-import 'notify_state.dart' show appForegroundProvider, callChatProvider, notifyChannelProvider;
+import 'notify_state.dart' show ChatTarget, appForegroundProvider, callChatProvider, notifyChannelProvider;
 
 class IncomingCall {
   const IncomingCall({required this.host, required this.sessionId, required this.title});
@@ -48,6 +48,9 @@ class IncomingCallController extends Notifier<IncomingCall?> {
       if (live == null) {
         unawaited(bridge.dismiss());
         unawaited(_presentNext());
+      } else {
+        // A call claimed this conversation: its earlier turns must not ring after it.
+        _queue.removeWhere((call) => call.host == live.host && call.sessionId == live.sessionId);
       }
     });
     // Outgoing voice calls need the same Telecom account even with reminders off.
@@ -58,7 +61,10 @@ class IncomingCallController extends Notifier<IncomingCall?> {
   Future<void> offer(IncomingCall call) async {
     final settings = await ref.read(callSettingsProvider.notifier).ready();
     if (!ref.mounted || !callOffered(settings, DateTime.now()) || ref.read(appForegroundProvider)) return;
-    if (state != null || ref.read(callChatProvider) != null) {
+    final live = ref.read(callChatProvider);
+    // A reply in the conversation being talked to is heard on the call, not rung in.
+    if (live != null && live.host == call.host && live.sessionId == call.sessionId) return;
+    if (state != null || live != null) {
       if (_queue.length >= _maxQueued) _queue.removeAt(0);
       _queue.add(call);
       return;
@@ -70,6 +76,12 @@ class IncomingCallController extends Notifier<IncomingCall?> {
     state = call;
     _pendingAnswer = null;
     await ref.read(incomingCallBridgeProvider).show(call.title, call.sessionId);
+  }
+
+  /// The conversation is being used (opened here, or sent to on another client):
+  /// its waiting turn no longer needs a call.
+  void retireSession(ChatTarget chat) {
+    _queue.removeWhere((call) => call.host == chat.host && call.sessionId == chat.sessionId);
   }
 
   /// One at a time: neither a prompt on screen nor a live call is interrupted.

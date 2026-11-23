@@ -631,6 +631,9 @@ class ChatAlertsController extends Notifier<ChatAlert?> {
       onSessionGone: (host, session) {
         if (attached()) _onSessionGone(host, session);
       },
+      onSessionActive: (host, session) {
+        if (attached()) ref.read(incomingCallProvider.notifier).retireSession((host: host, sessionId: session));
+      },
       onReannounce: (alert) {
         if (attached()) _onReannounce(alert);
       },
@@ -920,8 +923,11 @@ class ChatAlertsController extends Notifier<ChatAlert?> {
     if (banner != null && banner.host == host && banner.sessionId == sessionId) _banner = null;
   }
 
-  /// The person is looking at [chat]: its notifications and banner are moot.
-  void _seen(ChatTarget chat) => _clearSessionNotifications(chat.host, chat.sessionId);
+  /// The person is looking at [chat]: its notifications, banner and waiting call are moot.
+  void _seen(ChatTarget chat) {
+    _clearSessionNotifications(chat.host, chat.sessionId);
+    ref.read(incomingCallProvider.notifier).retireSession(chat);
+  }
 
   /// Hides [alert]'s banner (timeout or swipe); a newer banner stays.
   void dismissBanner(ChatAlert alert) {

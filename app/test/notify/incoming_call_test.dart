@@ -210,6 +210,22 @@ void main() {
     expect(methods, contains('show'), reason: 'the debug trigger goes through the same native ring');
   });
 
+  test('a finished turn in the conversation being called is not queued', () async {
+    final container = _containerWithSwitch(true);
+    addTearDown(container.dispose);
+    final notifier = container.read(incomingCallProvider.notifier);
+    final live = container.read(callChatProvider.notifier);
+    live.set((host: HostRef.local, sessionId: 's1'));
+
+    await notifier.offer(_call);
+    await notifier.offer(const IncomingCall(host: HostRef.local, sessionId: 's2', title: '别的任务'));
+    live.set(null);
+    await Future<void>.delayed(Duration.zero);
+
+    expect(container.read(incomingCallProvider)?.sessionId, 's2',
+        reason: 'replies of the conversation in the call must not be queued');
+  });
+
   test('new turns queue while a call is up, then ring one at a time', () async {
     final container = _containerWithSwitch(true);
     addTearDown(container.dispose);
