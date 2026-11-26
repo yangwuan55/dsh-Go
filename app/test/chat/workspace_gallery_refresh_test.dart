@@ -22,7 +22,7 @@ class _LocalPictures extends ArtifactFiles {
     String sessionId,
     Artifact artifact, {
     void Function(double? progress)? onProgress,
-    int maxBytes = maxRemoteArtifactBytes,
+    int? maxBytes,
   }) async => File('${dir.path}/${artifact.name}');
 }
 

@@ -3,12 +3,14 @@ import 'dart:async';
 import 'package:dsh_app/state/agents_state.dart';
 import 'package:dsh_app/state/commands_state.dart';
 import 'package:dsh_app/state/connection_state.dart';
+import 'package:dsh_app/state/features_state.dart';
 import 'package:dsh_app/state/hosts_state.dart';
 import 'package:dsh_app/state/models_state.dart';
 import 'package:dsh_app/state/plugins_state.dart';
 import 'package:dsh_app/state/session_detail_state.dart';
 import 'package:dsh_app/state/sessions_state.dart';
 import 'package:dsh_app/state/usage_state.dart';
+import 'package:dsh_app/ui/chat/slash_palette.dart';
 import 'package:dsh_client/dsh_client.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -355,5 +357,30 @@ void main() {
     expect(container.read(slashCommandsProvider(null)).any((c) => c.name == 'foo'), isTrue);
     container.read(_connection.notifier).set(null);
     expect(await container.read(newChat.future), isEmpty);
+  });
+
+  test('new chat slash palette lists host commands and skills before it has a session', () async {
+    a.rows = [_row('recent')];
+    a.fake.handlers['commands/list'] = (_) => [
+      {'name': 'deploy', 'description': 'Ship it'},
+    ];
+    final catalog = ProviderContainer(
+      overrides: [
+        activeHostProvider.overrideWith(_Active.new),
+        activeConnectionProvider.overrideWith((ref) => AsyncData(ref.watch(_connection))),
+        hostSessionsProvider.overrideWithValue(const {}),
+        agentTeamBundleProvider.overrideWithValue(const AsyncData(null)),
+        skillsProvider.overrideWith((ref, id) async => const [SkillInfo(name: 'code-review', description: 'Review')]),
+      ],
+    );
+    addTearDown(catalog.dispose);
+    catalog.read(_connection.notifier).set(_host(a, 'a'));
+    await catalog.read(sessionsProvider.future);
+    expect(catalog.read(sessionsProvider).value?.map((s) => s.sessionId), ['recent']);
+    await catalog.read(hostCommandsProvider('recent').future);
+    await catalog.read(skillsProvider('recent').future);
+
+    final typed = PaletteContent.of(catalog.read(slashCommandsProvider(null)), '/') as PaletteMatches;
+    expect(typed.commands.map((c) => c.name), containsAll(['deploy', 'code-review']));
   });
 }

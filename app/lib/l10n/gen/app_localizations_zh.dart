@@ -20616,6 +20616,30 @@ class L10nZh extends L10n {
   String get speechCallFooter => '通话时说完一句停一下，就会发出去；回答边写边读。';
 
   @override
+  String get speechCallAutoAnswer => '任务完成时来电';
+
+  @override
+  String get speechCallAutoAnswerHint => '任务完成时给手机来电提醒。来电页由你接听或拒绝，App 不会自动接通；关闭则不来电话。';
+
+  @override
+  String get speechCallAutoMode => '来电提醒时间';
+
+  @override
+  String get speechCallAutoModeAlways => '全天';
+
+  @override
+  String get speechCallAutoModeWindow => '仅时段内';
+
+  @override
+  String get speechCallAutoStart => '开始时间';
+
+  @override
+  String get speechCallAutoEnd => '结束时间';
+
+  @override
+  String get speechCallAutoWindowHint => '结束早于开始表示跨午夜，例如 23:00–07:00；两者相同则不来电提醒。';
+
+  @override
   String get speechCallBargeIn => '插话打断';
 
   @override
@@ -20734,6 +20758,10 @@ class L10nZh extends L10n {
 
   @override
   String get speechCallEndNoRecognizer => '通话需要能识别录音的方式：登录 DeepSeek 账号、填 API Key，或下载语音模型';
+
+  @override
+  String get speechCallEndRelayUnsupported =>
+      'DSH Remote 中继上，账号付费语音和引擎语音模型都用不了，通话没法识别。在设置里填 DeepSeek API Key 或配置其他云端识别后可以通话；换成本机引擎或 SSH 远程主机也能用登录账号和语音模型';
 
   @override
   String get speechCallEndBackground => '切到后台时通话会结束';
@@ -21006,6 +21034,17 @@ class L10nZh extends L10n {
 
   @override
   String get stateAlertTurnDone => '这一轮已完成';
+
+  @override
+  String get stateIncomingCallReportPrompt => '请简要汇报你刚才完成的工作：做了什么、结果如何、有没有需要我确认或接手的事项。';
+
+  @override
+  String stateMissedCall(String title) {
+    return '未接来电：$title';
+  }
+
+  @override
+  String get stateMissedCallPublic => '未接来电';
 
   @override
   String get stateAlertOutputLimit => '已结束 · 达到单次输出长度上限';
@@ -27988,6 +28027,10 @@ class L10nZh extends L10n {
 
   @override
   String get voiceConfigureEither => '系统识别用不了，可以在语音设置里下载语音模型';
+
+  @override
+  String get voiceRelayUnavailable =>
+      'DSH Remote 中继上用不了引擎语音模型：这里只能用系统识别，或在设置里填 API Key / 配置其他云端识别。本机引擎和 SSH 远程主机可用语音模型';
 
   @override
   String get voiceErrorNetworkTimeout => '语音识别连接超时，请检查网络';

@@ -78,7 +78,8 @@ export async function generateMedia(request, context) {
       publicationSuffix: context.resumeTaskId ? randomUUID() : undefined }).catch(storageFailure);
     const maximumItems = Array.from({ length: request.n ?? 1 }, (_, i) => ({
       path: store.outputPath(i + 1, request.model.kind === 'video' ? 'mp4' : 'webp'),
-      mime: request.model.kind === 'video' ? 'video/mp4' : 'image/jpeg', width: 16384, height: 16384, bytes: context.limits.maxVideoBytes ?? context.limits.maxImageBytes,
+      mime: request.model.kind === 'video' ? 'video/mp4' : 'image/jpeg', width: 16384, height: 16384,
+      bytes: request.model.kind === 'video' ? Number.MAX_SAFE_INTEGER : context.limits.maxImageBytes,
       ...(request.model.kind === 'video' ? { duration: 3600, codec: 'hevc' } : {}),
     }));
     if (Buffer.byteLength(JSON.stringify({ 'dsh-go/media': { ...meta, items: maximumItems } })) > 8192) fail('metadata');
@@ -144,7 +145,7 @@ export async function generateMedia(request, context) {
           remoteSucceeded = true; // Later download/storage failures do not make this outcome unknown.
           context.job?.updateProgress('正在保存视频原件');
           const staged = await (context.stageDownload ?? createStreamStager())(task.url, {
-            directory: store.stagingDirectory, signal, maxBytes: context.limits.maxVideoBytes,
+            directory: store.stagingDirectory, signal,
             ownDownload: store.ownDownload,
           });
           const info = await inspectVideo(staged.path, signal);

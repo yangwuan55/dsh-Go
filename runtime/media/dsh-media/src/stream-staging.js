@@ -10,7 +10,6 @@ import { randomUUID, createHash } from 'node:crypto';
 import { parseMediaUrl, isPublicAddress } from './http.js';
 import { MediaError, checkAbort, fail } from './errors.js';
 
-export const MAX_STAGED_DOWNLOAD_BYTES = 300 * 1024 * 1024;
 const same = (a, b) => typeof a?.ino === 'bigint' && a.ino !== 0n && a.dev === b?.dev && a.ino === b?.ino;
 function abortable(promise, signal) {
   checkAbort(signal);
@@ -45,8 +44,8 @@ export async function writeStagedChunk(handle, chunk, hash, signal) {
 
 /** Factory test option permits only literal loopback HTTP, never a hostname resolving to loopback. */
 export function createStreamStager({ allowLoopback = false, lookup = dnsLookup } = {}) {
-  return async function stageDownload(urlValue, { directory, maxBytes = MAX_STAGED_DOWNLOAD_BYTES, timeoutMs = 120_000, signal, ownDownload } = {}) {
-    if (typeof urlValue !== 'string' || typeof directory !== 'string' || !isAbsolute(directory) || !Number.isSafeInteger(maxBytes) || maxBytes < 1 || maxBytes > MAX_STAGED_DOWNLOAD_BYTES
+  return async function stageDownload(urlValue, { directory, maxBytes = Number.MAX_SAFE_INTEGER, timeoutMs = 120_000, signal, ownDownload } = {}) {
+    if (typeof urlValue !== 'string' || typeof directory !== 'string' || !isAbsolute(directory) || !Number.isSafeInteger(maxBytes) || maxBytes < 1
       || !Number.isSafeInteger(timeoutMs) || timeoutMs < 1 || timeoutMs > 1_800_000) fail('invalid_request');
     checkAbort(signal);
     const url = parseMediaUrl(urlValue, { allowLoopback });

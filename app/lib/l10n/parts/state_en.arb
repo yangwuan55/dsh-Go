@@ -26,6 +26,16 @@
   "stateAlertPublicApproval": "A step needs your approval",
   "stateAlertPublicQuestion": "A question needs your answer",
   "stateAlertTurnDone": "This turn finished",
+  "stateIncomingCallReportPrompt": "Briefly report the work you just finished: what you did, the result, and anything you need me to confirm or take over.",
+  "stateMissedCall": "Missed call: {title}",
+  "@stateMissedCall": {
+    "placeholders": {
+      "title": {
+        "type": "String"
+      }
+    }
+  },
+  "stateMissedCallPublic": "Missed call",
   "stateAlertOutputLimit": "Ended · Output limit reached",
   "stateAlertTurnBlocked": "This turn was blocked",
   "stateAlertEngineRestarted": "Interrupted · Engine restarted",

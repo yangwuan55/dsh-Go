@@ -143,6 +143,10 @@ class CallSettings {
     this.cue = true,
     this.visual = CallVisual.glass,
     this.pause = CallPause.normal,
+    this.autoAnswer = true,
+    this.autoAnswerWindow = false,
+    this.autoAnswerStart = 8 * 60,
+    this.autoAnswerEnd = 22 * 60,
   });
 
   /// Speaking over her stops her (else what is said while she talks is ignored).
@@ -167,6 +171,16 @@ class CallSettings {
   /// How long a pause ends what the person says.
   final CallPause pause;
 
+  /// Whether a finished turn raises a call. The person still answers it.
+  final bool autoAnswer;
+
+  /// When set, only [autoAnswerStart]–[autoAnswerEnd] may raise a call.
+  final bool autoAnswerWindow;
+
+  /// Minutes from midnight; the end is exclusive (a window may cross midnight).
+  final int autoAnswerStart;
+  final int autoAnswerEnd;
+
   CallSettings copyWith({
     bool? bargeIn,
     bool? spoken,
@@ -176,6 +190,10 @@ class CallSettings {
     bool? cue,
     CallVisual? visual,
     CallPause? pause,
+    bool? autoAnswer,
+    bool? autoAnswerWindow,
+    int? autoAnswerStart,
+    int? autoAnswerEnd,
   }) => CallSettings(
     bargeIn: bargeIn ?? this.bargeIn,
     spoken: spoken ?? this.spoken,
@@ -185,7 +203,21 @@ class CallSettings {
     cue: cue ?? this.cue,
     visual: visual ?? this.visual,
     pause: pause ?? this.pause,
+    autoAnswer: autoAnswer ?? this.autoAnswer,
+    autoAnswerWindow: autoAnswerWindow ?? this.autoAnswerWindow,
+    autoAnswerStart: autoAnswerStart ?? this.autoAnswerStart,
+    autoAnswerEnd: autoAnswerEnd ?? this.autoAnswerEnd,
   );
+}
+
+/// A window ending before it starts runs over midnight; the end is exclusive.
+bool callOffered(CallSettings settings, DateTime now) {
+  if (!settings.autoAnswer) return false;
+  if (!settings.autoAnswerWindow) return true;
+  final minute = now.hour * 60 + now.minute;
+  return settings.autoAnswerStart <= settings.autoAnswerEnd
+      ? minute >= settings.autoAnswerStart && minute < settings.autoAnswerEnd
+      : minute >= settings.autoAnswerStart || minute < settings.autoAnswerEnd;
 }
 
 class CallSettingsController extends Notifier<CallSettings> {
@@ -213,6 +245,12 @@ class CallSettingsController extends Notifier<CallSettings> {
         cue: json['cue'] != false,
         visual: CallVisual.values.asNameMap()[json['visual']] ?? CallVisual.glass,
         pause: CallPause.values.asNameMap()[json['pause']] ?? CallPause.normal,
+        // Older saves kept the reminder switch in `incomingCall`; the old
+        // auto-answer flag said who picked up, not whether to call.
+        autoAnswer: json['incomingCall'] is bool ? json['incomingCall'] as bool : json['autoAnswer'] != false,
+        autoAnswerWindow: json['autoAnswerWindow'] == true,
+        autoAnswerStart: json['autoAnswerStart'] is int ? json['autoAnswerStart'] as int : 8 * 60,
+        autoAnswerEnd: json['autoAnswerEnd'] is int ? json['autoAnswerEnd'] as int : 22 * 60,
       );
     } on Object {
       // Defaults for this run.
@@ -253,6 +291,10 @@ class CallSettingsController extends Notifier<CallSettings> {
         'cue': next.cue,
         'visual': next.visual.name,
         'pause': next.pause.name,
+        'autoAnswer': next.autoAnswer,
+        'autoAnswerWindow': next.autoAnswerWindow,
+        'autoAnswerStart': next.autoAnswerStart,
+        'autoAnswerEnd': next.autoAnswerEnd,
       }),
     );
   }

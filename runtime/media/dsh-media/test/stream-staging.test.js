@@ -8,7 +8,7 @@ import { syncBuiltinESMExports } from 'node:module';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createHash } from 'node:crypto';
-import { createStreamStager, writeStagedChunk, MAX_STAGED_DOWNLOAD_BYTES } from '../src/stream-staging.js';
+import { createStreamStager, writeStagedChunk } from '../src/stream-staging.js';
 async function setup(t, handler) {
  const directory=await mkdtemp(join(tmpdir(),'stream-stage-'));t.after(()=>rm(directory,{recursive:true,force:true}));
  const requests=[];const sockets=new Set();
@@ -70,8 +70,8 @@ test('mixed DNS answers and hostname-to-loopback rejected, production loopback r
  }
  await assert.rejects(createStreamStager()(f.url,{directory:f.directory}),{code:'unsafe_url'});assert.deepEqual(await readdir(f.directory),[]);
 });
-test('ceiling and pre-abort fail before request; no 300MiB sample allocated',async t=>{
- const f=await setup(t,(_q,r)=>r.end('x'));await assert.rejects(f.stage(f.url,{directory:f.directory,maxBytes:MAX_STAGED_DOWNLOAD_BYTES+1}),{code:'invalid_request'});const c=new AbortController();c.abort();await assert.rejects(f.stage(f.url,{directory:f.directory,signal:c.signal}),{code:'cancelled'});assert.equal(f.requests.length,0);
+test('an invalid byte budget and pre-abort fail before request',async t=>{
+ const f=await setup(t,(_q,r)=>r.end('x'));await assert.rejects(f.stage(f.url,{directory:f.directory,maxBytes:0}),{code:'invalid_request'});const c=new AbortController();c.abort();await assert.rejects(f.stage(f.url,{directory:f.directory,signal:c.signal}),{code:'cancelled'});assert.equal(f.requests.length,0);
 });
 
 test('replaced parent directory fails cleanup rather than touching a foreign child',async t=>{

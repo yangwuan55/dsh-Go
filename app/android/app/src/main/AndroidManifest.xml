@@ -15,10 +15,19 @@
     <uses-feature android:name="android.hardware.location" android:required="false" />
     <uses-feature android:name="android.hardware.location.network" android:required="false" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- Self-managed Telecom calls (notify/DshConnectionService.kt): our own call UI, no system dialer page. -->
+    <uses-permission android:name="android.permission.MANAGE_OWN_CALLS" />
+    <!-- Full-screen intent raises our call page when Telecom rings while the app is in the background. -->
+    <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
+    <!-- Self-managed Telecom calls vibrate from the app, not from the notification channel. -->
+    <uses-permission android:name="android.permission.VIBRATE" />
     <!-- The live activity (notify/LiveActivity.kt): Android 16 QPR1+ promotes it to a Live Update.
          Normal, granted at install; older systems skip a permission they don't define. -->
     <uses-permission android:name="android.permission.POST_PROMOTED_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <!-- Voice calls run as a microphone-type foreground service so the microphone keeps working
+         behind another app or on the lock screen (required on Android 14+). -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
     <uses-permission android:name="android.permission.WRITE_SECURE_SETTINGS" tools:ignore="ProtectedPermissions" />
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
     <!-- Composer voice input (voice/VoicePlugin.kt), asked for on the first tap of the mic. -->
@@ -52,10 +61,11 @@
     <!-- libadb-android declares no targetSdk, so the merger implies READ_PHONE_STATE ("读取手机状态");
          nothing here reads it. -->
     <uses-permission android:name="android.permission.READ_PHONE_STATE" tools:node="remove" />
-    <!-- flutter_webrtc's AudioSwitch asks for these; DSH Remote is data only and must not
-         manage system audio routing. Its native audio module uses media attributes (webrtc_peer.dart). -->
+    <!-- flutter_webrtc's AudioSwitch asks for BLUETOOTH; DSH Remote is data only and must not
+         manage system audio routing. Its native audio module uses media attributes (webrtc_peer.dart).
+         Voice calls do need MODIFY_AUDIO_SETTINGS: Android refuses call-audio routing without it. -->
     <uses-permission android:name="android.permission.BLUETOOTH" tools:node="remove" />
-    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" tools:node="remove" />
+    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
 
     <!-- The rootfs contains plaintext credentials; exclude it from Android backup.
          TODO(targetSdk >= 31): also configure dataExtractionRules. -->
@@ -90,6 +100,15 @@
             <!-- No launcher intent-filter here: the launcher entries are the aliases below.
                  (MainActivity.getMetaData reads the meta-data above whichever alias opened it.) -->
         </activity>
+
+        <!-- Full-screen call page raised by the notification's full-screen intent. -->
+        <activity
+            android:name=".notify.IncomingCallActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:showOnLockScreen="true"
+            android:turnScreenOn="true"
+            android:theme="@android:style/Theme.Material.NoActionBar" />
 
         <!-- 桌面图标 (icons/LauncherIcons.kt): one launcher entry per icon, all opening MainActivity;
              exactly one is enabled. Each carries the long-press shortcuts (新对话, 语音输入;
@@ -318,6 +337,12 @@
                 android:value="Runs the user's local DeepSeek Harness agent server" />
         </service>
 
+        <!-- Keeps a voice call's microphone and playback alive in the background (speech/CallService.kt). -->
+        <service
+            android:name=".speech.CallService"
+            android:exported="false"
+            android:foregroundServiceType="microphone" />
+
         <!-- Keeps the floating pet's process up when only remote hosts are used (pet/PetOverlayService.kt). -->
         <service
             android:name=".pet.PetOverlayService"
@@ -326,6 +351,26 @@
             <property
                 android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
                 android:value="Shows the user's floating assistant pet while their remote agent session runs" />
+        </service>
+
+        <!-- Self-managed Telecom call: system audio routing, our own full-screen call page. -->
+        <service
+            android:name=".notify.DshConnectionService"
+            android:exported="true"
+            android:permission="android.permission.BIND_TELECOM_CONNECTION_SERVICE">
+            <intent-filter>
+                <action android:name="android.telecom.ConnectionService" />
+            </intent-filter>
+        </service>
+
+        <!-- Keeps the host connections and Dart alive while finished-turn calls are on. -->
+        <service
+            android:name=".notify.IncomingCallService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Shows an incoming call screen when the user's agent turns finish" />
         </service>
 
         <!-- 手机操控: reads and drives the main screen, owns the status bar / confirm overlay (phone/a11y). -->

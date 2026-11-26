@@ -13,6 +13,7 @@ import io.flutter.embedding.engine.plugins.FlutterPlugin
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 import io.github.ccch1mneyyy.dsh_app.nativemedia.ClipPlayer
+import io.github.ccch1mneyyy.dsh_app.speech.CallAudio
 import java.io.File
 import java.util.Locale
 
@@ -125,10 +126,15 @@ class CompanionVoicePlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
         engine.setSpeechRate((call.argument<Double>("rate") ?: 1.0).toFloat())
         engine.setPitch((call.argument<Double>("pitch") ?: 1.0).toFloat())
         val queue = if (call.argument<Boolean>("flush") == true) TextToSpeech.QUEUE_FLUSH else TextToSpeech.QUEUE_ADD
+        // The phone's TTS defaults to the media stream; in a call her voice must ride the
+        // voice-call stream, the one the hardware volume keys adjust.
+        val attrs = CallAudio.attributes()
+        engine.setAudioAttributes(attrs)
+        val params = Bundle().apply { putInt(TextToSpeech.Engine.KEY_PARAM_STREAM, attrs.volumeControlStream) }
         if (queue == TextToSpeech.QUEUE_FLUSH) speaking.clear()
         // Others duck before her first word.
         requestFocus()
-        if (engine.speak(text, queue, Bundle(), id) != TextToSpeech.SUCCESS) {
+        if (engine.speak(text, queue, params, id) != TextToSpeech.SUCCESS) {
             if (speaking.isEmpty()) abandonFocus()
             return false
         }
@@ -154,7 +160,7 @@ class CompanionVoicePlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
         val am = audio ?: return
         lateinit var request: AudioFocusRequest
         request = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK)
-            .setAudioAttributes(SPEECH)
+            .setAudioAttributes(CallAudio.attributes())
             .setOnAudioFocusChangeListener { change ->
                 if (change == AudioManager.AUDIOFOCUS_LOSS || change == AudioManager.AUDIOFOCUS_LOSS_TRANSIENT) {
                     // A late event for an already-abandoned request leaves a newer line alone.

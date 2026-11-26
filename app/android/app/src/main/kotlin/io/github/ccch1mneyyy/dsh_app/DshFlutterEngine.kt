@@ -49,6 +49,7 @@ object DshFlutterEngine {
             engine.plugins.add(io.github.ccch1mneyyy.dsh_app.usage.UsagePlugin())
             engine.plugins.add(io.github.ccch1mneyyy.dsh_app.companion.CompanionVoicePlugin())
             engine.plugins.add(io.github.ccch1mneyyy.dsh_app.speech.SpeechPlugin())
+            engine.plugins.add(io.github.ccch1mneyyy.dsh_app.notify.IncomingCallPlugin())
             engine.plugins.add(io.github.ccch1mneyyy.dsh_app.companion.CompanionWidgetPlugin())
             engine.plugins.add(io.github.ccch1mneyyy.dsh_app.companion.CompanionReminderPlugin())
             engine.plugins.add(io.github.ccch1mneyyy.dsh_app.companion.CompanionMapPlugin())

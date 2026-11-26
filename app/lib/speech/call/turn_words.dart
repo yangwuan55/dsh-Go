@@ -26,6 +26,9 @@ const _stop = [
   'stop', 'wait', 'hold on', 'holdon',
 ];
 
+/// Spoken on its own, these end the call without touching the hang-up key.
+const _hangUp = ['hangup', 'endthecall'];
+
 final _noise = RegExp(r'[^\p{L}\p{N} ]', unicode: true);
 
 /// [text] (recognized) taken as said over the voice.
@@ -42,4 +45,13 @@ OverWords overWords(String text) {
     rest = rest.substring(word.length);
   }
   return OverWords.backchannel;
+}
+
+/// What the person said asks to end the call: 挂断 (with any softener, as in
+/// 挂断吧、那就挂断) or its English equivalent as a whole phrase.
+bool isHangUp(String text) {
+  final plain = text.toLowerCase().replaceAll(_noise, '').trim();
+  final tight = plain.replaceAll(' ', '');
+  if (tight.contains('挂断')) return true;
+  return _hangUp.contains(tight);
 }

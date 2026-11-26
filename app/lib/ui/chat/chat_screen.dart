@@ -397,12 +397,25 @@ class _ChatScreenState extends ConsumerState<ChatScreen> with WidgetsBindingObse
         }
       },
       // The voice model lives in the on-device engine: it counts for that host only.
-      modelReady: () =>
-          mounted &&
-          (ref.read(activeConnectionProvider).value?.isLocal ?? false) &&
-          ref.read(voiceModelProvider).status == VoiceModelStatus.ready,
+      modelReady: () {
+        if (!mounted || ref.read(voiceModelProvider).status != VoiceModelStatus.ready) return false;
+        final active = ref.read(activeConnectionProvider).value;
+        if (active?.isLocal ?? false) return true;
+        // On a relay the model in the phone's engine is still usable.
+        return active?.client.carrier.kind == 'remote-relay' &&
+            ref.read(localConnectionProvider).value?.client != null;
+      },
       // The capability probe is async and can finish after this page is gone.
       client: () => mounted ? ref.read(activeConnectionProvider).value?.client : null,
+      // A relay forwards no `speech/*`; the phone's own engine still serves
+      // the downloaded model on its separate HTTP connection.
+      speechClient: () {
+        if (!mounted) return null;
+        final active = ref.read(activeConnectionProvider).value?.client;
+        return active?.carrier.kind == 'remote-relay'
+            ? ref.read(localConnectionProvider).value?.client
+            : active;
+      },
       inputOwner: () => mounted ? ref.read(activeHostProvider) : null,
       onRecognized: () {
         if (mounted) ref.read(usageStatsProvider.notifier).count(UsageCount.voice);
@@ -1509,6 +1522,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> with WidgetsBindingObse
       openChatCall(
         context,
         title: title,
+        sessionId: sessionId,
         session: () async {
           // Another host now: its conversation of the same id is not this call's.
           if (!mounted || ref.read(activeHostProvider) != host) return null;

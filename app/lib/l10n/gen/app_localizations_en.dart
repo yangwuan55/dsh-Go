@@ -21804,6 +21804,32 @@ class L10nEn extends L10n {
       'In a call, pause after you speak and it is sent; the answer is read while it is written.';
 
   @override
+  String get speechCallAutoAnswer => 'Call when a task finishes';
+
+  @override
+  String get speechCallAutoAnswerHint =>
+      'Rings your phone when a task finishes. You answer the call yourself; the app never picks up. Off means no call.';
+
+  @override
+  String get speechCallAutoMode => 'Call reminder hours';
+
+  @override
+  String get speechCallAutoModeAlways => 'All day';
+
+  @override
+  String get speechCallAutoModeWindow => 'Set hours';
+
+  @override
+  String get speechCallAutoStart => 'Start time';
+
+  @override
+  String get speechCallAutoEnd => 'End time';
+
+  @override
+  String get speechCallAutoWindowHint =>
+      'An end before the start runs past midnight, e.g. 23:00–07:00. The same time means no call.';
+
+  @override
   String get speechCallBargeIn => 'Interrupt by speaking';
 
   @override
@@ -21928,6 +21954,10 @@ class L10nEn extends L10n {
   @override
   String get speechCallEndNoRecognizer =>
       'A call needs a recognizer that takes recordings: sign in to DeepSeek, add an API key, or download the voice model';
+
+  @override
+  String get speechCallEndRelayUnsupported =>
+      'On the DSH Remote relay, account-paid speech and the engine’s voice model can’t be reached, so the call has no recognizer. Add a DeepSeek API key or another cloud recognizer in Settings to make calls, or use the local engine / an SSH remote host to use your account and the voice model';
 
   @override
   String get speechCallEndBackground => 'Calls end when the app goes to the background';
@@ -22209,6 +22239,18 @@ class L10nEn extends L10n {
 
   @override
   String get stateAlertTurnDone => 'This turn finished';
+
+  @override
+  String get stateIncomingCallReportPrompt =>
+      'Briefly report the work you just finished: what you did, the result, and anything you need me to confirm or take over.';
+
+  @override
+  String stateMissedCall(String title) {
+    return 'Missed call: $title';
+  }
+
+  @override
+  String get stateMissedCallPublic => 'Missed call';
 
   @override
   String get stateAlertOutputLimit => 'Ended · Output limit reached';
@@ -29556,6 +29598,10 @@ class L10nEn extends L10n {
 
   @override
   String get voiceConfigureEither => 'The phone’s service isn’t available. Download the voice model in voice settings.';
+
+  @override
+  String get voiceRelayUnavailable =>
+      'The engine’s voice model isn’t available over the DSH Remote relay: use the phone’s recognizer here, or add an API key / another cloud service in Settings. The voice model works on the local engine and over SSH remote hosts';
 
   @override
   String get voiceErrorNetworkTimeout => 'Speech recognition timed out. Check your connection.';

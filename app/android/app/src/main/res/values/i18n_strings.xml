@@ -282,6 +282,10 @@
     <string name="safe_config_missing">Main configuration profiles/web/package.json not found</string>
     <string name="safe_config_busy">Another program is changing the plugin configuration. Try again later</string>
     <!-- service -->
+    <string name="speech_call_channel">Voice call</string>
+    <string name="speech_call_channel_description">Ongoing voice call; tap to return to it</string>
+    <string name="speech_call_notification_title">Voice call in progress</string>
+    <string name="speech_call_notification_text">Tap to return to the call</string>
     <string name="service_stopped_channel">Engine stopped</string>
     <string name="service_stopped_title">Local DSH stopped</string>
     <string name="service_updating">Updating runtime</string>
@@ -331,4 +335,9 @@
     <string name="background_keep_save_failed">Could not save the connection preference. Check it before restarting the app.</string>
     <string name="background_viewport_invalid">Unknown background viewport preset</string>
     <string name="background_viewport_save_failed">Could not save the background viewport preference.</string>
+    <!-- incoming call -->
+    <string name="incoming_call_alert_channel">Incoming call</string>
+    <string name="incoming_call_title">Task finished</string>
+    <string name="incoming_call_answer">Answer</string>
+    <string name="incoming_call_hangup">Hang up</string>
 </resources>

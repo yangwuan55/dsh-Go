@@ -15,12 +15,16 @@ import '../../state/voice_settings.dart';
 import '../../state/voice_state.dart';
 import '../common/app_dialog.dart';
 import '../companion/companion_voice_page.dart';
+import 'background_guide_page.dart';
 import '../providers/provider_widgets.dart';
 import '../speech/call/call_backdrop.dart';
 import '../shell/page_frame.dart';
 import '../theme/app_icons.dart';
 import '../theme/theme.dart';
 import 'settings_widgets.dart';
+
+String _hourMinute(int minutes) =>
+    '${(minutes ~/ 60).toString().padLeft(2, '0')}:${(minutes % 60).toString().padLeft(2, '0')}';
 
 String voiceModeLabel(L10n l10n, VoiceMode mode) => switch (mode) {
   VoiceMode.auto => l10n.voiceModeAuto,
@@ -122,6 +126,24 @@ class _VoiceSettingsPageState extends ConsumerState<VoiceSettingsPage> {
     });
   }
 
+  Future<void> _pickAutoTime(
+    BuildContext context,
+    CallSettingsController calls, {
+    required bool start,
+    required int current,
+  }) async {
+    final picked = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay(hour: current ~/ 60, minute: current % 60),
+    );
+    if (picked == null || !context.mounted) return;
+    final minutes = picked.hour * 60 + picked.minute;
+    await calls.edit((saved) => saved.copyWith(
+      autoAnswerStart: start ? minutes : saved.autoAnswerStart,
+      autoAnswerEnd: start ? saved.autoAnswerEnd : minutes,
+    ));
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = context.l10n;
@@ -216,6 +238,55 @@ class _VoiceSettingsPageState extends ConsumerState<VoiceSettingsPage> {
               }),
               onTap: () => unawaited(showCallBackdropSheet(context)),
             ),
+            SettingsSwitchTile(
+              key: const ValueKey('speech-call-auto-answer'),
+              title: l10n.speechCallAutoAnswer,
+              subtitle: l10n.speechCallAutoAnswerHint,
+              value: call.autoAnswer,
+              onChanged: (on) => unawaited(calls.edit((saved) => saved.copyWith(autoAnswer: on))),
+            ),
+            if (call.autoAnswer) ...[
+              SettingsSegmentTile<bool>(
+                key: const ValueKey('speech-call-auto-mode'),
+                title: l10n.speechCallAutoMode,
+                segments: [
+                  PillSegment(false, l10n.speechCallAutoModeAlways),
+                  PillSegment(true, l10n.speechCallAutoModeWindow),
+                ],
+                selected: call.autoAnswerWindow,
+                onChanged: (window) =>
+                    unawaited(calls.edit((saved) => saved.copyWith(autoAnswerWindow: window))),
+              ),
+              if (call.autoAnswerWindow) ...[
+                SettingsTile(
+                  key: const ValueKey('speech-call-auto-start'),
+                  title: l10n.speechCallAutoStart,
+                  value: Text(_hourMinute(call.autoAnswerStart)),
+                  onTap: () => unawaited(
+                    _pickAutoTime(context, calls, start: true, current: call.autoAnswerStart),
+                  ),
+                ),
+                SettingsTile(
+                  key: const ValueKey('speech-call-auto-end'),
+                  title: l10n.speechCallAutoEnd,
+                  subtitle: l10n.speechCallAutoWindowHint,
+                  value: Text(_hourMinute(call.autoAnswerEnd)),
+                  onTap: () => unawaited(_pickAutoTime(context, calls, start: false, current: call.autoAnswerEnd)),
+                ),
+              ],
+            ],
+            // Lock-screen calls need Android's background/autostart switches;
+            // the same guide the settings screen uses covers the Chinese ROMs.
+            if (ref.watch(androidSystemFeaturesProvider))
+              SettingsTile(
+                key: const ValueKey('speech-call-incoming-guide'),
+                icon: AppIcons.keepAlive,
+                title: l10n.accessBatteryTitle,
+                subtitle: l10n.accessBatteryWhy,
+                onTap: () => unawaited(
+                  Navigator.of(context).push<void>(MaterialPageRoute(builder: (_) => const BackgroundGuidePage())),
+                ),
+              ),
             SettingsSwitchTile(
               key: const ValueKey('speech-call-barge-in'),
               title: l10n.speechCallBargeIn,

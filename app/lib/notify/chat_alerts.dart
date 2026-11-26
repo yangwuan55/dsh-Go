@@ -458,6 +458,7 @@ class HostAlertTracker {
     required this.onAlert,
     required this.onWithdraw,
     required this.onSessionGone,
+    this.onSessionActive,
     this.skipApproval,
     this.onReannounce,
     this.onRequestEpochChanged,
@@ -466,6 +467,7 @@ class HostAlertTracker {
     this.isCompanionAttached,
     this.announceDelay = const Duration(milliseconds: 800),
     this.reconcileDelay = const Duration(seconds: 3),
+    this.turnSeqs,
   });
 
   final HostRef host;
@@ -475,6 +477,9 @@ class HostAlertTracker {
   /// A request alert is moot: answered, withdrawn, or gone after a reconnect.
   final void Function(HostRef host, String sessionId, String key) onWithdraw;
   final void Function(HostRef host, String sessionId) onSessionGone;
+
+  /// A turn started in this conversation, by this or another client.
+  final void Function(HostRef host, String sessionId)? onSessionActive;
 
   /// True when this device answers [sessionId]'s approvals by itself
   /// (「本对话都允许」): no alert for those.
@@ -505,6 +510,11 @@ class HostAlertTracker {
   /// After a reconnect the Host redelivers what is still pending; requests not
   /// redelivered within this window were settled while we were away.
   final Duration reconcileDelay;
+
+  /// Last alerted turn seq per host/session. Shared by all trackers and saved
+  /// by the owner, so a reconnect does not forget a turn finished while away.
+  final Map<String, int>? turnSeqs;
+  final Map<String, int> _ownTurnSeqs = {};
 
   StreamSubscription<HostEvent>? _sub;
   Timer? _reconcile;
@@ -581,6 +591,35 @@ class HostAlertTracker {
     await _sub?.cancel();
   }
 
+  /// Catch-up after a lost connection or a resume: compare every session's
+  /// last turn with the last one alerted on, however long ago it finished.
+  /// The first sight of a session is a baseline, never a historical call.
+  Future<void> sweep() async {
+    await _resync();
+    if (_disposed) return;
+    final seen = turnSeqs ?? _ownTurnSeqs;
+    for (final entry in _sessions.entries) {
+      final sessionId = entry.key;
+      if (_running[sessionId] == true || _disposed) continue;
+      TurnOutcome? last;
+      try {
+        last = await source.lastTurn(sessionId).timeout(const Duration(seconds: 3));
+      } catch (_) {
+        continue;
+      }
+      if (last == null || _disposed) continue;
+      final key = '${host.kind.name}:${host.id}:$sessionId';
+      final previous = seen[key];
+      if (previous == null) {
+        seen[key] = last.seq;
+        continue;
+      }
+      if (last.seq <= previous) continue;
+      await _onIdle(sessionId, freshness: 'swept');
+      seen[key] = last.seq;
+    }
+  }
+
   void _onEvent(HostEvent event) {
     if (_disposed) return;
     final actual = source;
@@ -638,6 +677,7 @@ class HostAlertTracker {
         final session = _requests.remove(eventId);
         if (session != null) onWithdraw(host, session, eventId);
       case SessionStatusEvent(:final sessionId, :final running):
+        if (running) onSessionActive?.call(host, sessionId);
         final was = _running[sessionId];
         final wasLive = provenance != null && identical(_companionRunning[sessionId], provenance.generation);
         if (running && provenance != null) _companionRunning[sessionId] = provenance.generation;

@@ -5,6 +5,7 @@ import 'dart:async';
 
 import 'package:dsh_app/state/connection_state.dart';
 import 'package:dsh_app/state/hosts_state.dart';
+import 'package:dsh_app/state/incoming_call_state.dart';
 import 'package:dsh_app/state/notify_state.dart';
 import 'package:dsh_app/state/sessions_state.dart';
 import 'package:dsh_client/dsh_client.dart';
@@ -381,6 +382,30 @@ void main() {
       await container.read(notifyPrefsProvider.notifier).setApproval(false);
       await foreground(false);
       expect(channel.shown.single.key, 'q9');
+    });
+
+    test('a session used on another client drops its queued call', () async {
+      make();
+      await settle(); // let the fake local connection attach its tracker
+      local.sessions = [...local.sessions, session('s3', title: '第三个')];
+      container.read(appForegroundProvider.notifier).set(false);
+      container.read(callChatProvider.notifier).set((host: HostRef.local, sessionId: 's2'));
+      local.outcomes['s1'] = outcome(7, 'completed', reply: '好了');
+      local.outcomes['s3'] = outcome(8, 'completed', reply: '另一个');
+      local.emit(const SessionStatusEvent('s1', true));
+      local.emit(const SessionStatusEvent('s1', false));
+      local.emit(const SessionStatusEvent('s3', true));
+      local.emit(const SessionStatusEvent('s3', false));
+      await settle();
+
+      // Someone replies in s1 on another client: its queued call is stale.
+      local.emit(const SessionStatusEvent('s1', true));
+      await settle();
+      container.read(callChatProvider.notifier).set(null);
+      await settle();
+
+      expect(container.read(incomingCallProvider)?.sessionId, 's3',
+          reason: 'the used session must be skipped; another queued turn still rings');
     });
 
     test('a terminal outcome seen in the current chat stays quiet after leaving', () async {

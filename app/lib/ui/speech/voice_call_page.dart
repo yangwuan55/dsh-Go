@@ -10,7 +10,6 @@
 import 'dart:async';
 import 'dart:io';
 import 'dart:math' as math;
-import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -34,7 +33,10 @@ import '../../speech/speech_settings.dart';
 import '../../speech/voice_cloud.dart';
 import '../../state/account_state.dart';
 import '../../state/app_notes.dart';
+import '../../state/hosts_state.dart' show HostKind, activeHostProvider;
+import '../../state/incoming_call_bridge.dart';
 import '../../state/notify_state.dart';
+import '../../state/sessions_state.dart' show currentSessionProvider;
 import '../../state/voice_settings.dart';
 import '../../state/voice_state.dart';
 import '../chat/voice/voice_bridge.dart';
@@ -55,15 +57,30 @@ import 'call/call_transcript.dart';
 import 'call/call_visuals.dart';
 import 'speech_ui.dart';
 
+/// The call page's route: other UI brings a covered call back by name.
+const voiceCallRoute = 'dsh-voice-call';
+
 /// Opens a call with the main chat's conversation. [session] gives its id,
 /// creating it for a new chat; [title] heads the page.
 Future<void> openChatCall(
   BuildContext context, {
   required String title,
   required Future<String?> Function() session,
+  String? sessionId,
+  String? openingPrompt,
+  bool placeTelecomCall = true,
 }) async {
   final container = ProviderScope.containerOf(context, listen: false);
-  await openVoiceCall(context, title: title, conversation: ChatCallConversation(container, session));
+  final conversation = ChatCallConversation(container, session);
+  // Claim the chat now, before the first message: turns arriving during setup queue.
+  container.read(callChatProvider.notifier).set((host: container.read(activeHostProvider), sessionId: sessionId ?? ''));
+  await openVoiceCall(
+    context,
+    title: title,
+    conversation: conversation,
+    openingPrompt: openingPrompt,
+    placeTelecomCall: placeTelecomCall,
+  );
 }
 
 /// Opens a call with [conversation]; [backdrop], when given, is the picture
@@ -73,16 +90,25 @@ Future<void> openVoiceCall(
   required String title,
   required CallConversation conversation,
   CallBackdrop? backdrop,
+  String? openingPrompt,
+  bool placeTelecomCall = true,
 }) async {
   final container = ProviderScope.containerOf(context, listen: false);
   container.read(readAloudProvider.notifier).stop();
   await Navigator.of(context).push(
     PageRouteBuilder<void>(
+      settings: const RouteSettings(name: voiceCallRoute),
       opaque: true,
       fullscreenDialog: true,
       transitionDuration: AppMotion.of(context, const Duration(milliseconds: 520)),
       reverseTransitionDuration: AppMotion.of(context, AppMotion.collapse),
-      pageBuilder: (_, _, _) => VoiceCallPage(title: title, conversation: conversation, backdrop: backdrop),
+      pageBuilder: (_, _, _) => VoiceCallPage(
+        title: title,
+        conversation: conversation,
+        backdrop: backdrop,
+        openingPrompt: openingPrompt,
+        placeTelecomCall: placeTelecomCall,
+      ),
       transitionsBuilder: (_, animation, _, child) {
         final curve = CurvedAnimation(parent: animation, curve: AppMotion.enter, reverseCurve: AppMotion.exit);
         // Opening: the page rises out of the dark.
@@ -98,10 +124,21 @@ Future<void> openVoiceCall(
 }
 
 class VoiceCallPage extends ConsumerStatefulWidget {
-  const VoiceCallPage({super.key, required this.title, required this.conversation, this.backdrop});
+  const VoiceCallPage({
+    super.key,
+    required this.title,
+    required this.conversation,
+    this.backdrop,
+    this.openingPrompt,
+    this.placeTelecomCall = true,
+  });
 
   final String title;
   final CallConversation conversation;
+  final String? openingPrompt;
+
+  /// An answered incoming call already had its Telecom call; don't take a second one.
+  final bool placeTelecomCall;
 
   /// The picture behind the call instead of the one in the call settings.
   final CallBackdrop? backdrop;
@@ -256,12 +293,33 @@ class _VoiceCallPageState extends ConsumerState<VoiceCallPage> with WidgetsBindi
 
   int _settling = 0;
 
+  /// The Host this call began on: a later host switch must not relabel its ending.
+  bool _relayAtStart = false;
+
   Future<void> _start() async {
+    _relayAtStart = ref.read(activeHostProvider).kind == HostKind.relay;
     final pcm = ref.read(streamingPcmCaptureProvider);
     final asr = ref.read(streamingAsrProvider);
     final found = liveWordsModel(ref);
     _callConnect = ref.read(usageStatsProvider.notifier).beginOperation(UsageOperation.callConnect);
+    final bridge = ref.read(incomingCallBridgeProvider);
+    if (widget.placeTelecomCall) {
+      // Telecom is optional: a refusal must not keep the microphone from opening.
+      await bridge.placeCall(widget.title).catchError(
+        (Object e) => debugPrint('Voice call: Telecom placeCall failed: $e'),
+      );
+      // Its privileged earpiece route must be gone before CallCapture opens the mic.
+      await bridge.endOutgoing().catchError(
+        (Object e) => debugPrint('Voice call: Telecom endOutgoing failed: $e'),
+      );
+    }
+    // The channel call may have outlived the page: a disposed call cannot start.
+    if (!mounted) return;
     await _call.start();
+    // The reply stream is subscribed inside start(): sending before the call
+    // listens would leave its report unheard. Same send path as a typed message.
+    final prompt = widget.openingPrompt;
+    if (prompt != null) unawaited(_call.report(prompt));
     try {
       final chosen = await found;
       if (chosen == null || !mounted || _call.phase == CallPhase.ended) return;
@@ -323,7 +381,15 @@ class _VoiceCallPageState extends ConsumerState<VoiceCallPage> with WidgetsBindi
           if (route == null || !route.isActive) return;
           final navigator = Navigator.of(context);
           if (!route.isCurrent) navigator.popUntil((r) => r == route);
-          unawaited(navigator.maybePop());
+          final target = ref.read(callChatProvider);
+          if (target != null && target.sessionId.isNotEmpty) {
+            ref.read(activeHostProvider.notifier).select(target.host);
+            ref.read(currentSessionProvider.notifier).select(target.sessionId);
+            navigator.popUntil((r) => r.isFirst);
+          } else {
+            // No conversation was reached (an early failure): keep the page underneath.
+            unawaited(navigator.maybePop());
+          }
         },
       );
     }
@@ -383,7 +449,17 @@ class _VoiceCallPageState extends ConsumerState<VoiceCallPage> with WidgetsBindi
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.paused || state == AppLifecycleState.hidden) _call.backgrounded();
+    if (state == AppLifecycleState.resumed) {
+      // Coming back from another app or a notification must not leave a route over the call.
+      final route = ModalRoute.of(context);
+      if (route != null && route.isActive && !route.isCurrent) Navigator.of(context).popUntil((r) => r == route);
+      return;
+    }
+    if (state != AppLifecycleState.paused && state != AppLifecycleState.hidden) return;
+    // Android's microphone foreground service (speech/CallService.kt) keeps the call alive behind
+    // another app and with the screen locked. Without that lease the microphone goes silent, so
+    // the other platforms still end the call instead of listening to nothing.
+    if (ref.read(operatingSystemProvider) != 'android') _call.backgrounded();
   }
 
   @override
@@ -412,14 +488,15 @@ class _VoiceCallPageState extends ConsumerState<VoiceCallPage> with WidgetsBindi
         switch (_call.ended) {
           CallEnd.permission => l10n.speechCallEndPermission,
           CallEnd.microphone => l10n.speechCallEndMicrophone,
-          CallEnd.noRecognizer =>
-            wordsForIos
-                ? (ref.read(accountProvider).signedIn
-                      ? l10n.iosSpeechCallEndNoRecognizerSignedIn
-                      : l10n.iosSpeechCallEndNoRecognizer)
-                : (ref.read(accountProvider).signedIn
-                      ? l10n.speechCallEndNoRecognizerSignedIn
-                      : l10n.speechCallEndNoRecognizer),
+          CallEnd.noRecognizer => _relayAtStart
+              ? l10n.speechCallEndRelayUnsupported
+              : wordsForIos
+              ? (ref.read(accountProvider).signedIn
+                    ? l10n.iosSpeechCallEndNoRecognizerSignedIn
+                    : l10n.iosSpeechCallEndNoRecognizer)
+              : (ref.read(accountProvider).signedIn
+                    ? l10n.speechCallEndNoRecognizerSignedIn
+                    : l10n.speechCallEndNoRecognizer),
           CallEnd.background => l10n.speechCallEndBackground,
           CallEnd.failed => l10n.speechCallEndFailed,
           CallEnd.hungUp || null => l10n.speechCallEnded,
@@ -807,7 +884,7 @@ class _TopBar extends StatelessWidget {
           const SizedBox(width: 10),
           Expanded(
             child: Center(
-              child: _Frosted(
+              child: CallFrosted(
                 blur: blur,
                 shape: const StadiumBorder(),
                 child: Padding(
@@ -855,36 +932,6 @@ class _TopBar extends StatelessWidget {
   }
 }
 
-/// Frosted glass 40 high in [shape]: the call's glass tint and hairline over a
-/// blur of what is behind ([blur], as the performance setting allows).
-class _Frosted extends StatelessWidget {
-  const _Frosted({required this.shape, required this.blur, required this.child, this.width});
-
-  final OutlinedBorder shape;
-  final bool blur;
-  final double? width;
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) {
-    final ink = CallInk.of(context);
-    final glass = Container(
-      width: width,
-      height: 40,
-      decoration: ShapeDecoration(
-        color: ink.glass,
-        shape: shape.copyWith(side: BorderSide(color: ink.glassBorder)),
-      ),
-      child: child,
-    );
-    if (!blur) return glass;
-    return ClipPath(
-      clipper: ShapeBorderClipper(shape: shape),
-      child: BackdropFilter(filter: ui.ImageFilter.blur(sigmaX: 18, sigmaY: 18), child: glass),
-    );
-  }
-}
-
 /// A small round glass key in the top bar; gives a little under the finger.
 class _RoundKey extends StatefulWidget {
   const _RoundKey({super.key, required this.icon, required this.label, required this.blur, required this.onTap});
@@ -924,7 +971,7 @@ class _RoundKeyState extends State<_RoundKey> {
           scale: _down ? 0.9 : 1,
           duration: AppMotion.of(context, _down ? AppMotion.press : AppMotion.standard),
           curve: _down ? Curves.easeOut : Curves.easeOutBack,
-          child: _Frosted(
+          child: CallFrosted(
             width: 40,
             shape: const CircleBorder(),
             blur: widget.blur,

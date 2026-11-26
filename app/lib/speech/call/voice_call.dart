@@ -11,6 +11,8 @@
 // person taking the turn: she stops, the turn behind her too, and the next
 // message tells the model where she was cut off.
 //
+// Saying 挂断 ends the call on its own, whether said over her or not.
+//
 // The controller knows nothing of widgets or of where messages go: a
 // [CallConversation] sends and reports the reply, a [VoiceCloud] recognizes,
 // [voice] makes a fresh [SpeechOut] for each reply.
@@ -218,6 +220,24 @@ class VoiceCallController extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// The opening report has no words to recognize, but its reply is still a turn.
+  Future<bool> report(String text) async {
+    // A word spoken while the page opens may have moved the phase to hearing already.
+    if (_phase != CallPhase.listening && _phase != CallPhase.hearing) return false;
+    _replyDone = false;
+    _cued = false;
+    _cueTimer?.cancel();
+    _cueTimer = Timer(cueAfter, _cue);
+    _set(CallPhase.thinking);
+    final sent = await conversation.send(text);
+    if (!sent && _phase != CallPhase.ended) {
+      _replyDone = true;
+      _error = const CallSendFailed();
+      _set(CallPhase.listening);
+    }
+    return sent;
+  }
+
   /// The reply being read (so far).
   String get reply => _reply;
 
@@ -392,6 +412,10 @@ class VoiceCallController extends ChangeNotifier {
       return;
     }
     if (_phase == CallPhase.ended || mine != _recognizing) return;
+    if (isHangUp(text)) {
+      _end(CallEnd.hungUp);
+      return;
+    }
     final taken = over ? overWords(text) : OverWords.speech;
     if (taken == OverWords.backchannel && _over) {
       _carryOn();
@@ -641,8 +665,9 @@ class VoiceCallController extends ChangeNotifier {
 
   void hangUp() => _end(CallEnd.hungUp);
 
-  /// The app went to the background: Android gives a backgrounded app no
-  /// microphone, so the call ends rather than listen to silence.
+  /// The app went to the background on a platform with no background microphone lease:
+  /// the call ends rather than listen to silence. Android keeps the call alive with a
+  /// microphone foreground service (speech/CallService.kt) and never calls this.
   void backgrounded() {
     if (!_asking) _end(CallEnd.background);
   }

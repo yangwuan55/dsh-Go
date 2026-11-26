@@ -70,9 +70,7 @@ class FeatureOffline extends ConsumerWidget {
         icon: AppIcons.disconnected,
         title: l10n.featuresHostUnreachable(name ?? l10n.commonRemoteHost),
         body: status.error?.message,
-        action: status.error?.retryable ?? true
-            ? (l10n.commonRetry, () => ref.read(remoteConnectionProvider(host).notifier).retry())
-            : null,
+        action: (l10n.commonRetry, () => ref.read(remoteConnectionProvider(host).notifier).retry()),
       );
     }
     if (connection.isLoading) {

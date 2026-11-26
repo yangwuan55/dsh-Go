@@ -135,6 +135,8 @@ Connections automatically try LAN / P2P, then TURN, and finally Relay without a 
 
 DSH Remote connects to one host at a time; switching disconnects the previous one. Over DSH Remote: you can send images only, plugins can only be turned on or off, and DS Bot and chat log export aren't available. Conversation backups use a separate session-transfer capability, not chat log export.
 
+For voice, the relay itself carries neither the engine's voice model nor the account's speech bridge. While the phone's local engine is running, dictation and calls use its voice model, and account-paid speech goes through that engine's bridge. Without it, dictation can use the phone's recognizer or a cloud service you configure in Settings, and calls work with an API key or a cloud recognizer. SSH remote hosts can use the voice model and account-paid speech directly.
+
 ## Conversation backups and restore
 
 <!-- nav: commonSettings,commonRemoteHost,backupTitle -->

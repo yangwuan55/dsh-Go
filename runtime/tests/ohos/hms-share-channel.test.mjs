@@ -227,10 +227,12 @@ test('cancellation during real IO settles immediately but retains lease until de
   const next = send(f, { text: 'after IO' }); await settle(f); f.panels[0].emit('dismiss'); await next.done;
 });
 
-test('outgoing 300 MiB aggregate cap rejects a sparse oversized file before copy', async t => {
+test('outgoing has no aggregate byte cap: a file past 300 MiB is staged', async t => {
   const f = await shareFixture(t); const path = await f.local('large.bin', ''); await fsp.truncate(path, 300 * 1024 * 1024 + 1);
-  assert.equal((await send(f, { paths: [path], mimeTypes: ['application/octet-stream'] }).done).error, 'too_large');
-  assert.equal(f.writes, 0); assert.equal(f.panels.length, 0);
+  const request = send(f, { paths: [path], mimeTypes: ['application/octet-stream'] });
+  await settle(f);
+  assert.equal(request.replies.length, 0);
+  assert.ok(f.panels[0].data.records.length > 0, 'the oversized file reached the share panel');
 });
 
 test('malformed args, huge metadata, unsafe URI/path and incomplete origin fail before IO', async t => {
@@ -305,7 +307,6 @@ test('incoming policy matches Android and Dart while outgoing and count limits s
   assert.equal(f.policy.SHARE_MAX_FILE, 200 * 1024 * 1024);
   assert.equal(f.policy.SHARE_MAX_TOTAL, 400 * 1024 * 1024);
   assert.equal(f.policy.SHARE_MAX_ITEMS, 9);
-  assert.equal(f.policy.SHARE_OUT_MAX_BYTES, 300 * 1024 * 1024);
 });
 
 test('a real 31 MiB incoming file is copied with bounded requests and closed descriptors', async t => {

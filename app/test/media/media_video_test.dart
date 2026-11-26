@@ -28,7 +28,7 @@ class _Files extends ArtifactFiles {
     String sessionId,
     Artifact artifact, {
     void Function(double?)? onProgress,
-    int maxBytes = maxRemoteArtifactBytes,
+    int? maxBytes,
   }) async {
     reads++;
     onProgress?.call(0.5);

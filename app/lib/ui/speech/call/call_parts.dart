@@ -187,6 +187,36 @@ class _HangUpKeyState extends State<HangUpKey> {
   }
 }
 
+/// Frosted glass 40 high in [shape]: the call's glass tint and hairline over a
+/// blur of what is behind ([blur], as the performance setting allows).
+class CallFrosted extends StatelessWidget {
+  const CallFrosted({super.key, required this.shape, required this.blur, required this.child, this.width});
+
+  final OutlinedBorder shape;
+  final bool blur;
+  final double? width;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final ink = CallInk.of(context);
+    final glass = Container(
+      width: width,
+      height: 40,
+      decoration: ShapeDecoration(
+        color: ink.glass,
+        shape: shape.copyWith(side: BorderSide(color: ink.glassBorder)),
+      ),
+      child: child,
+    );
+    if (!blur) return glass;
+    return ClipPath(
+      clipper: ShapeBorderClipper(shape: shape),
+      child: BackdropFilter(filter: ui.ImageFilter.blur(sigmaX: 18, sigmaY: 18), child: glass),
+    );
+  }
+}
+
 /// What is happening, sliding in when it changes; [dots] breathe after it.
 class CallStatus extends StatelessWidget {
   const CallStatus({super.key, required this.text, this.dots = false, this.color});
@@ -214,7 +244,7 @@ class CallStatus extends StatelessWidget {
         key: ValueKey('$text$dots'),
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text(text, style: style),
+          Flexible(child: Text(text, style: style)),
           if (dots) _Dots(color: style?.color ?? CallInk.of(context).dim),
         ],
       ),

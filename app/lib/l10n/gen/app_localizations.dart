@@ -37908,6 +37908,54 @@ abstract class L10n {
   /// **'通话时说完一句停一下，就会发出去；回答边写边读。'**
   String get speechCallFooter;
 
+  /// No description provided for @speechCallAutoAnswer.
+  ///
+  /// In zh, this message translates to:
+  /// **'任务完成时来电'**
+  String get speechCallAutoAnswer;
+
+  /// No description provided for @speechCallAutoAnswerHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'任务完成时给手机来电提醒。来电页由你接听或拒绝，App 不会自动接通；关闭则不来电话。'**
+  String get speechCallAutoAnswerHint;
+
+  /// No description provided for @speechCallAutoMode.
+  ///
+  /// In zh, this message translates to:
+  /// **'来电提醒时间'**
+  String get speechCallAutoMode;
+
+  /// No description provided for @speechCallAutoModeAlways.
+  ///
+  /// In zh, this message translates to:
+  /// **'全天'**
+  String get speechCallAutoModeAlways;
+
+  /// No description provided for @speechCallAutoModeWindow.
+  ///
+  /// In zh, this message translates to:
+  /// **'仅时段内'**
+  String get speechCallAutoModeWindow;
+
+  /// No description provided for @speechCallAutoStart.
+  ///
+  /// In zh, this message translates to:
+  /// **'开始时间'**
+  String get speechCallAutoStart;
+
+  /// No description provided for @speechCallAutoEnd.
+  ///
+  /// In zh, this message translates to:
+  /// **'结束时间'**
+  String get speechCallAutoEnd;
+
+  /// No description provided for @speechCallAutoWindowHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'结束早于开始表示跨午夜，例如 23:00–07:00；两者相同则不来电提醒。'**
+  String get speechCallAutoWindowHint;
+
   /// No description provided for @speechCallBargeIn.
   ///
   /// In zh, this message translates to:
@@ -38129,6 +38177,12 @@ abstract class L10n {
   /// In zh, this message translates to:
   /// **'通话需要能识别录音的方式：登录 DeepSeek 账号、填 API Key，或下载语音模型'**
   String get speechCallEndNoRecognizer;
+
+  /// No description provided for @speechCallEndRelayUnsupported.
+  ///
+  /// In zh, this message translates to:
+  /// **'DSH Remote 中继上，账号付费语音和引擎语音模型都用不了，通话没法识别。在设置里填 DeepSeek API Key 或配置其他云端识别后可以通话；换成本机引擎或 SSH 远程主机也能用登录账号和语音模型'**
+  String get speechCallEndRelayUnsupported;
 
   /// No description provided for @speechCallEndBackground.
   ///
@@ -38651,6 +38705,24 @@ abstract class L10n {
   /// In zh, this message translates to:
   /// **'这一轮已完成'**
   String get stateAlertTurnDone;
+
+  /// No description provided for @stateIncomingCallReportPrompt.
+  ///
+  /// In zh, this message translates to:
+  /// **'请简要汇报你刚才完成的工作：做了什么、结果如何、有没有需要我确认或接手的事项。'**
+  String get stateIncomingCallReportPrompt;
+
+  /// No description provided for @stateMissedCall.
+  ///
+  /// In zh, this message translates to:
+  /// **'未接来电：{title}'**
+  String stateMissedCall(String title);
+
+  /// No description provided for @stateMissedCallPublic.
+  ///
+  /// In zh, this message translates to:
+  /// **'未接来电'**
+  String get stateMissedCallPublic;
 
   /// No description provided for @stateAlertOutputLimit.
   ///
@@ -51095,6 +51167,12 @@ abstract class L10n {
   /// In zh, this message translates to:
   /// **'系统识别用不了，可以在语音设置里下载语音模型'**
   String get voiceConfigureEither;
+
+  /// No description provided for @voiceRelayUnavailable.
+  ///
+  /// In zh, this message translates to:
+  /// **'DSH Remote 中继上用不了引擎语音模型：这里只能用系统识别，或在设置里填 API Key / 配置其他云端识别。本机引擎和 SSH 远程主机可用语音模型'**
+  String get voiceRelayUnavailable;
 
   /// No description provided for @voiceErrorNetworkTimeout.
   ///

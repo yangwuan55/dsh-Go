@@ -46,3 +46,6 @@ site/build/
 runtime/ohos/process/build/
 # NodeMobile, the runtime archive and addon sources: tooling/ios/prepare-engine.sh
 app/ios/Engine/
+# local heap dumps and agent runtime state
+*.hprof
+.omc/
