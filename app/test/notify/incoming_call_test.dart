@@ -367,7 +367,8 @@ void main() {
       autoAnswerStart: 22 * 60,
       autoAnswerEnd: 8 * 60,
     );
-    expect(callOffered(const CallSettings(), DateTime(2026, 11, 21, 23)), isTrue);
+    expect(callOffered(const CallSettings(autoAnswerWindow: true), DateTime(2026, 11, 21, 9)), isTrue);
+    expect(callOffered(const CallSettings(autoAnswerWindow: true), DateTime(2026, 11, 21, 23)), isFalse);
     expect(callOffered(const CallSettings(autoAnswer: false), DateTime(2026, 11, 21, 12)), isFalse);
     expect(callOffered(night, DateTime(2026, 11, 21, 21, 59)), isFalse);
     expect(callOffered(night, DateTime(2026, 11, 21, 22)), isTrue);

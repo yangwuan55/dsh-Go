@@ -307,6 +307,14 @@ class RemoteConnectionController extends AsyncNotifier<HostConnection?> {
     if (link == null) return null;
     var name = ref.read(hostNameProvider(host));
 
+    // Call catch-up keeps failed controllers alive across host switches;
+    // picking this host again must reconnect instead of replaying the error.
+    ref.listen(activeHostProvider, (previous, next) {
+      if (previous != next && next == host && (state.hasError || link.status.phase == HostLinkPhase.failed)) {
+        ref.invalidateSelf();
+      }
+    });
+
     HostConnection wrap(DshClient client) => HostConnection(
       client: client,
       name: name,

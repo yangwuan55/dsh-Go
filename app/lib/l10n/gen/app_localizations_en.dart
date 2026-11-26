@@ -21198,7 +21198,7 @@ class L10nEn extends L10n {
 
   @override
   String get speechCallAutoWindowHint =>
-      'An end before the start runs past midnight, e.g. 22:00–08:00. The same time means no call.';
+      'An end before the start runs past midnight, e.g. 23:00–07:00. The same time means no call.';
 
   @override
   String get speechCallBargeIn => 'Interrupt by speaking';

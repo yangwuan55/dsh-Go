@@ -11982,7 +11982,7 @@
   "speechCallAutoModeWindow": "仅时段内",
   "speechCallAutoStart": "开始时间",
   "speechCallAutoEnd": "结束时间",
-  "speechCallAutoWindowHint": "结束早于开始表示跨午夜，例如 22:00–08:00；两者相同则不来电提醒。",
+  "speechCallAutoWindowHint": "结束早于开始表示跨午夜，例如 23:00–07:00；两者相同则不来电提醒。",
   "speechCallBargeIn": "插话打断",
   "speechCallBargeInHint": "AI 说话时你一开口，它先轻下来；「嗯」「对」它接着说，说别的它就停下听你",
   "speechCallSpoken": "口语回答",

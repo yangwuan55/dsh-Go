@@ -32,8 +32,9 @@ void main() {
   late FakeSshServer server;
   late FakeConnector connector;
 
-  ProviderContainer container({FakeRelayBackend? relay, UrlOpener? opener}) {
+  ProviderContainer container({FakeRelayBackend? relay, UrlOpener? opener, Duration? Function(int, Object)? retry}) {
     final c = ProviderContainer(
+      retry: retry,
       overrides: [
         secretStoreProvider.overrideWithValue(secrets),
         localConnectionProvider.overrideWith(_NoLocal.new),
@@ -350,6 +351,25 @@ void main() {
       c.read(remoteConnectionProvider(host).notifier).retry();
       await until(c, activeConnectionProvider, (s) => s.value != null, what: 'SSH 重试成功');
       expect(c.read(activeConnectionProvider).value?.label, '电脑 · SSH');
+    });
+
+    test('returning to a failed remote host reconnects without restarting the app', () async {
+      server.failNext.add(const HostLinkError(HostLinkErrorKind.authFailed, '登录被拒绝'));
+      final c = container(retry: (_, _) => null);
+      await loaded(c);
+      await c.read(hostsProvider.notifier).saveSsh(sampleSsh, secrets: const SshSecrets(password: 'pw'));
+      final host = HostRef.ssh(sampleSsh.id);
+      c.read(activeHostProvider.notifier).select(host);
+      final sub = c.listen(activeConnectionProvider, (_, _) {});
+      addTearDown(sub.close);
+      // Incoming-call catch-up keeps the failed connection provider alive.
+      final held = c.listen(remoteConnectionProvider(host), (_, _) {});
+      addTearDown(held.close);
+      await until(c, remoteConnectionProvider(host), (s) => s.hasError && !s.isLoading, what: 'SSH 连接失败');
+
+      c.read(activeHostProvider.notifier).select(HostRef.local);
+      c.read(activeHostProvider.notifier).select(host);
+      await until(c, activeConnectionProvider, (s) => s.value != null, what: '切回远程主机后重连');
     });
 
     test('an SSH host that no longer exists falls back to 本机', () async {

@@ -36867,7 +36867,7 @@ abstract class L10n {
   /// No description provided for @speechCallAutoWindowHint.
   ///
   /// In zh, this message translates to:
-  /// **'结束早于开始表示跨午夜，例如 22:00–08:00；两者相同则不来电提醒。'**
+  /// **'结束早于开始表示跨午夜，例如 23:00–07:00；两者相同则不来电提醒。'**
   String get speechCallAutoWindowHint;
 
   /// No description provided for @speechCallBargeIn.

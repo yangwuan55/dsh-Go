@@ -145,8 +145,8 @@ class CallSettings {
     this.pause = CallPause.normal,
     this.autoAnswer = true,
     this.autoAnswerWindow = false,
-    this.autoAnswerStart = 22 * 60,
-    this.autoAnswerEnd = 8 * 60,
+    this.autoAnswerStart = 8 * 60,
+    this.autoAnswerEnd = 22 * 60,
   });
 
   /// Speaking over her stops her (else what is said while she talks is ignored).
@@ -249,8 +249,8 @@ class CallSettingsController extends Notifier<CallSettings> {
         // auto-answer flag said who picked up, not whether to call.
         autoAnswer: json['incomingCall'] is bool ? json['incomingCall'] as bool : json['autoAnswer'] != false,
         autoAnswerWindow: json['autoAnswerWindow'] == true,
-        autoAnswerStart: json['autoAnswerStart'] is int ? json['autoAnswerStart'] as int : 22 * 60,
-        autoAnswerEnd: json['autoAnswerEnd'] is int ? json['autoAnswerEnd'] as int : 8 * 60,
+        autoAnswerStart: json['autoAnswerStart'] is int ? json['autoAnswerStart'] as int : 8 * 60,
+        autoAnswerEnd: json['autoAnswerEnd'] is int ? json['autoAnswerEnd'] as int : 22 * 60,
       );
     } on Object {
       // Defaults for this run.

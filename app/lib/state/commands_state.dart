@@ -8,6 +8,7 @@ import 'android_features.dart';
 import 'connection_state.dart';
 import 'features_state.dart';
 import 'hosts_state.dart';
+import 'sessions_state.dart';
 
 /// Where a slash command runs.
 enum SlashCommandKind {
@@ -305,10 +306,15 @@ final skillCommandsProvider = Provider.autoDispose.family<List<SlashCommand>, St
 
 /// Everything the palette offers for [sessionId].
 final slashCommandsProvider = Provider.autoDispose.family<List<SlashCommand>, String?>((ref, sessionId) {
-  final host = ref.watch(hostCommandsProvider(sessionId)).value ?? const [];
+  // A new chat has no session to ask about; read the catalogs through the
+  // newest one the drawer already loaded.
+  final conn = ref.watch(activeConnectionProvider).value;
+  final catalogSessionId =
+      sessionId ?? (conn == null ? null : ref.watch(sessionsProvider).value?.firstOrNull?.sessionId);
+  final host = ref.watch(hostCommandsProvider(catalogSessionId)).value ?? const [];
   return mergeSlashCommands(
     host,
-    skills: ref.watch(skillCommandsProvider(sessionId)),
+    skills: ref.watch(skillCommandsProvider(catalogSessionId)),
     harmony: ref.watch(operatingSystemProvider) == 'ohos',
   );
 });
