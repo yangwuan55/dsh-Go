@@ -1,8 +1,8 @@
 # iOS 原生通道核对
 
-Flutter 的 `MethodChannel` 能编译通过，即使 iOS 没有注册同名通道。2026-11-23 清点 `app/lib` 中直接声明的 51 条 `dsh/*` 通道：iOS 注册或显式提供空事件流的有 35 条。语音通话和普通消息朗读共用的 `dsh/speech` 已补齐；`test-channel-contract.py` 检查语音方法和 iOS 分发器一致，也要求新增的共享通道有 iOS 注册或在下表明确归类，避免再把缺少通道误报为麦克风故障。
+Flutter 的 `MethodChannel` 能编译通过，即使 iOS 没有注册同名通道。清点 `app/lib` 中直接声明的 53 条 `dsh/*` 通道：iOS 注册或显式提供空事件流的有 35 条。语音通话和普通消息朗读共用的 `dsh/speech` 已补齐；`test-channel-contract.py` 检查语音方法和 iOS 分发器一致，也要求新增的共享通道有 iOS 注册或在下表明确归类，避免再把缺少通道误报为麦克风故障。
 
-其余 16 条没有同名 iOS 通道，按源码调用路径处理：
+其余 18 条没有同名 iOS 通道，按源码调用路径处理：
 
 | 通道 | 当前 iOS 路径 | 后续工作 |
 | --- | --- | --- |
@@ -12,6 +12,7 @@ Flutter 的 `MethodChannel` 能编译通过，即使 iOS 没有注册同名通�
 | `dsh/companion/always_on` | 伙伴常驻（前台服务保活）只接了 Android；iOS 上调用报缺少通道时按未开启处理 | iOS 没有对应的常驻机制，暂不移植 |
 | `dsh/companion` | 伙伴「她会留意你的通知」只接了 Android（NotificationListenerService）；iOS 上入口不显示，调用缺少通道时按未开启处理 | iOS 不允许读取别的 App 的通知，不移植 |
 | `dsh/companion_screen/state` | 伙伴看屏的屏幕状态事件只接了 Android（沿用手机操控）；iOS 上常驻不会开启，观察器从不订阅这条事件流 | iOS 不提供同类能力，暂不移植 |
+| `dsh/incoming_call` | 仅 Android 原生来电页（Telecom）接此通道；iOS 缺少通道时按未开启处理，应用内来电浮层仍可用 | iOS 无同类 Telecom 接口，不移植原生来电页 |
 | `dsh/attachment-files` | OHOS 专用附件接口 | 无需移植；iOS 走自己的文件入口 |
 | `dsh/authorized-workspaces` | OHOS 手机文件夹授权（系统目录选择与持久授权）；Dart 侧尚未接入界面 | 无需移植；iOS 的工作目录授权走自己的路径 |
 | `dsh/dynamic_color` | 缺失时退回预设配色 | 壁纸取色未实现 |
