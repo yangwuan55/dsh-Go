@@ -626,4 +626,47 @@ void main() {
     expect(rig.outs, hasLength(1));
     rig.call.hangUp();
   });
+
+  test('a subagent reply arriving while listening is read as a new turn', () async {
+    final rig = _Rig();
+    await rig.call.start();
+    await rig.say();
+    rig.conversation.reply('上一轮的回答。', done: true);
+    rig.outs.single.emit(const SpeechOutDone());
+    expect(rig.call.phase, CallPhase.listening);
+
+    // chat_call hands out an assistant item that landed after the turn was done.
+    rig.conversation.reply('子代理查到的结果。', done: true, fresh: true);
+    expect(rig.outs, hasLength(2));
+    expect(rig.outs.last.added, ['子代理查到的结果。']);
+    expect(rig.outs.last.finished, isTrue);
+
+    // A long-lived subscription replaying the same text is not read twice.
+    rig.conversation.reply('子代理查到的结果。', done: true);
+    expect(rig.outs, hasLength(2));
+  });
+
+  test('a subagent reply arriving while the person talks waits for the next reply', () async {
+    final rig = _Rig();
+    await rig.call.start();
+    await rig.say();
+    rig.conversation.reply('上一轮的回答。', done: true);
+    rig.outs.single.emit(const SpeechOutDone());
+    expect(rig.call.phase, CallPhase.listening);
+
+    rig.audio.emit(const SpeechStart(over: false));
+    expect(rig.call.phase, CallPhase.hearing);
+    rig.conversation.reply('子代理查到的结果。', done: true, fresh: true);
+    expect(rig.outs, hasLength(1));
+    expect(rig.outs.single.added, ['上一轮的回答。']);
+
+    rig.audio.emit(Utterance(_Rig.second, const Duration(seconds: 1)));
+    await pumpEventQueue();
+    expect(rig.conversation.sent.last, endsWith('今天天气怎么样'));
+
+    // The new turn's reply carries the deferred text with it, in order.
+    rig.conversation.reply('主回复。', done: true);
+    expect(rig.outs, hasLength(2));
+    expect(rig.outs.last.added, ['子代理查到的结果。主回复。']);
+  });
 }

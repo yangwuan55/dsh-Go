@@ -50,13 +50,17 @@ enum CallEnd { hungUp, permission, microphone, noRecognizer, background, failed 
 
 /// The reply to what was last sent, so far.
 class CallReply {
-  const CallReply(this.text, {required this.done});
+  const CallReply(this.text, {required this.done, this.fresh = false});
 
   /// Latest visible reply. A durable message can replace a streaming draft.
   final String text;
 
   /// The turn ended.
   final bool done;
+
+  /// New content after the last turn ended (e.g. a subagent result): a call
+  /// that had stopped reading starts this one afresh.
+  final bool fresh;
 }
 
 /// Where a call's messages go and its replies come from.
@@ -189,6 +193,9 @@ class VoiceCallController extends ChangeNotifier {
   SpeechOut? _out;
   StreamSubscription<SpeechOutEvent>? _outSub;
   bool _replyDone = true;
+
+  /// Reply text that arrived while the person was talking, read with the next reply.
+  String _pending = '';
   int _turn = 0;
   int _recognizing = 0;
 
@@ -437,6 +444,7 @@ class VoiceCallController extends ChangeNotifier {
     // Skipped while this was being made out: it still goes, its reply is not read.
     final hushed = mine == _hushed;
     _replyDone = hushed;
+    if (hushed) _pending = '';
     final hint = _spokenHint;
     final cut = _cutAt;
     _cutAt = null;
@@ -461,7 +469,18 @@ class VoiceCallController extends ChangeNotifier {
   }
 
   void _onReply(CallReply reply) {
-    if (_phase == CallPhase.ended || _replyDone) return;
+    if (_phase == CallPhase.ended) return;
+    if (reply.fresh) {
+      // The first words of a new window start at zero, not where the last one
+      // stopped; later parts of the same window carry on from there.
+      if (_replyDone) _reply = '';
+      _replyDone = false;
+    }
+    if (_replyDone) return;
+    // Late content arriving while the person has the floor waits for the next
+    // reply instead of cutting in; phase hearing/thinking/speaking all mean
+    // they may be talking or her last turn has not settled yet.
+    final buffered = reply.fresh && _phase != CallPhase.listening;
     final text = reply.text;
     if (text != _reply) {
       final extendsReply = text.startsWith(_reply);
@@ -470,19 +489,29 @@ class VoiceCallController extends ChangeNotifier {
         _said = '';
         _voiced = false;
       }
+      final delta = extendsReply ? text.substring(_reply.length) : text;
       if (text.isNotEmpty) {
         if (_reply.isEmpty) unawaited(const DiagnosticsChannel().recordVoiceStage('reply_received'));
-        final out = _out ??= _newVoice();
-        out.add(extendsReply ? text.substring(_reply.length) : text);
-      } else if (_phase == CallPhase.speaking) {
-        _set(CallPhase.thinking);
+        if (buffered) {
+          _pending += delta;
+        } else {
+          final out = _out ??= _newVoice();
+          out.add(_pending + delta);
+          _pending = '';
+          _reply = text;
+          if (_turns.isNotEmpty) _turns.last = CallTurn(_turns.last.you, her: text);
+          notifyListeners();
+        }
+      } else {
+        _reply = text;
+        if (_turns.isNotEmpty) _turns.last = CallTurn(_turns.last.you, her: text);
+        if (_phase == CallPhase.speaking) _set(CallPhase.thinking);
+        notifyListeners();
       }
-      _reply = text;
-      if (_turns.isNotEmpty) _turns.last = CallTurn(_turns.last.you, her: text);
-      notifyListeners();
     }
     if (reply.done) {
       _replyDone = true;
+      if (buffered) return;
       final out = _out;
       if (out == null) {
         // Nothing to say (the turn only ran tools, or was stopped).

@@ -92,8 +92,12 @@ class ChatCallConversation implements CallConversation {
     return true;
   }
 
+  Set<String> _assistantKeys(ChatState state) => {
+    for (final item in state.items)
+      if (item is AssistantChatItem) item.key,
+  };
+
   void _changed(ChatState state) {
-    if (!_tracking) return;
     if (state.running) _sawRunning = true;
     final steps = [
       for (final item in state.items)
@@ -102,15 +106,26 @@ class ChatCallConversation implements CallConversation {
     final text = steps.join('\n');
     if (text != _last && text.length >= _last.length) {
       _last = text;
-      if (!_replies.isClosed) _replies.add(CallReply(text, done: false));
+      if (!_replies.isClosed) _replies.add(CallReply(text, done: false, fresh: !_tracking));
     }
-    if (_sawRunning && !state.running) _done();
+    if (_tracking) {
+      if (_sawRunning && !state.running) _done(state);
+      return;
+    }
+    // A subagent result can land after the turn was done. There is no running
+    // transition left to close it, so close it here and absorb its items.
+    if (steps.isNotEmpty && !state.running) {
+      _before = _assistantKeys(state);
+      if (!_replies.isClosed) _replies.add(CallReply(text, done: true, fresh: true));
+    }
   }
 
-  void _done() {
+  void _done([ChatState? state]) {
     if (!_tracking) return;
     _tracking = false;
     _idle?.cancel();
+    state ??= _id == null ? null : _container.read(chatProvider(_id!));
+    if (state != null) _before = _assistantKeys(state);
     if (!_replies.isClosed) _replies.add(CallReply(_last, done: true));
   }
 
@@ -120,7 +135,10 @@ class ChatCallConversation implements CallConversation {
     _tracking = false;
     _idle?.cancel();
     if (id == null) return;
-    if (_container.read(chatProvider(id)).running) await _container.read(chatProvider(id).notifier).cancel();
+    final state = _container.read(chatProvider(id));
+    // The interrupted turn is over for this call: only later items count as new.
+    _before = _assistantKeys(state);
+    if (state.running) await _container.read(chatProvider(id).notifier).cancel();
   }
 
   @override
