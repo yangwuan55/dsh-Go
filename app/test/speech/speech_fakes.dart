@@ -150,7 +150,8 @@ class FakeConversation implements CallConversation {
   bool accept = true;
   final _replies = StreamController<CallReply>.broadcast(sync: true);
 
-  void reply(String text, {bool done = false}) => _replies.add(CallReply(text, done: done));
+  void reply(String text, {bool done = false, bool fresh = false}) =>
+      _replies.add(CallReply(text, done: done, fresh: fresh));
 
   @override
   Future<bool> send(String text) async {
