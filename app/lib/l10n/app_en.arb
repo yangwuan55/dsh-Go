@@ -8727,7 +8727,7 @@
   "workshopErrorStorage": "Couldn't read or write files on this phone.",
   "workshopErrorIntegrity": "The download didn't match what was registered, so it was discarded. Try again.",
   "workshopErrorDowngrade": "The version on this phone is newer and won't be replaced with an older one.",
-  "workshopErrorRuntimeMissing": "Invite a character in the Companion room first. Then other companions can be installed.",
+  "workshopErrorAppRuntimeMissing": "This build has no bundled companion runtime, so a companion pack can't be installed.",
   "workshopErrorReadersBusy": "She's in use. Leave the Companion room or close the floating window, then try again.",
   "workshopErrorInstallRecord": "The install record on this phone doesn't match, so nothing was changed.",
   "workshopErrorOtherOrigin": "This was installed from a different Workshop.",

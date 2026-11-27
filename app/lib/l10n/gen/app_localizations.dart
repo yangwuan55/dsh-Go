@@ -52476,11 +52476,11 @@ abstract class L10n {
   /// **'本机装的版本更新，不会换成旧的。'**
   String get workshopErrorDowngrade;
 
-  /// No description provided for @workshopErrorRuntimeMissing.
+  /// No description provided for @workshopErrorAppRuntimeMissing.
   ///
   /// In zh, this message translates to:
-  /// **'要先在伙伴小屋里请过一位角色，才能装别的伙伴。'**
-  String get workshopErrorRuntimeMissing;
+  /// **'这个版本没有内置伙伴运行库，暂时装不了伙伴包。'**
+  String get workshopErrorAppRuntimeMissing;
 
   /// No description provided for @workshopErrorReadersBusy.
   ///

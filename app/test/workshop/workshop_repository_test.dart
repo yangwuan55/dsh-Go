@@ -505,7 +505,7 @@ void main() {
       (CompanionPackException(CompanionPackProblem.storage, 'companion_bad_json'),
         'workshop_companion_bad_json', true),
       (CompanionPackException(CompanionPackProblem.noRuntime, 'companion_bad_json'),
-        'workshop_runtime_missing', false),
+        'workshop_app_runtime_missing', false),
       (CompanionPackException(CompanionPackProblem.notAPack, 'companion_readers_busy'),
         'workshop_readers_busy', false),
       (CompanionPackException(CompanionPackProblem.notAPack, 'companion_future'),

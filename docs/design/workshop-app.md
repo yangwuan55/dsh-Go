@@ -56,7 +56,7 @@
 
 Companion 槽位的列表读取将预期的收据、存储和恢复错误经既有映射保留为无可信 receipt 的 `WorkshopInstallationIssue`，不阻止已读取的健康 Pet 行返回。这包括底层已转换为 `CompanionPackException` 的停止读者失败；未被底层转换而直接逸出的程序错误仍由 repository 整体映射，使整次查询失败。成功收据还须 `kind == 'companion'`，否则报 `workshop_install_record`。此隔离只用于列表，不改 store 的恢复、严格安装 / 卸载围栏，也不增加全 pack 完整性扫描。
 
-工坊伙伴包只有 character，必须先有本机钉死摘要的 runtime；缺失返回 `workshop_runtime_missing`，本层不自动下载。来自工坊的角色经现有安装器及完整性门；原有的本地导入仍保留其调用方式。
+工坊伙伴包只有 character；本机还没有钉死摘要的 runtime 时，本层先把 App 自带的运行库装进去（内置角色进书架，不进小屋），再由现有安装器把运行库复制进工坊包。App 构建没带运行库时返回 `workshop_app_runtime_missing`，本层不联网下载。原有的本地导入仍保留其调用方式。
 
 ### 本机诊断分类与移除结果
 

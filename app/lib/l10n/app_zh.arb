@@ -17724,7 +17724,7 @@
   "workshopErrorStorage": "没能读写手机上的文件。",
   "workshopErrorIntegrity": "下载的内容和登记的不一致，已丢弃。请重试。",
   "workshopErrorDowngrade": "本机装的版本更新，不会换成旧的。",
-  "workshopErrorRuntimeMissing": "要先在伙伴小屋里请过一位角色，才能装别的伙伴。",
+  "workshopErrorAppRuntimeMissing": "这个版本没有内置伙伴运行库，暂时装不了伙伴包。",
   "workshopErrorReadersBusy": "她正在用着，先离开伙伴小屋或关掉悬浮窗再试。",
   "workshopErrorInstallRecord": "本机的安装记录对不上，没有动它。",
   "workshopErrorOtherOrigin": "这是从别的工坊装的。",

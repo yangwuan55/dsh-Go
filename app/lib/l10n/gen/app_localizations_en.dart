@@ -30308,8 +30308,8 @@ class L10nEn extends L10n {
   String get workshopErrorDowngrade => 'The version on this phone is newer and won\'t be replaced with an older one.';
 
   @override
-  String get workshopErrorRuntimeMissing =>
-      'Invite a character in the Companion room first. Then other companions can be installed.';
+  String get workshopErrorAppRuntimeMissing =>
+      'This build has no bundled companion runtime, so a companion pack can\'t be installed.';
 
   @override
   String get workshopErrorReadersBusy =>

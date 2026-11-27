@@ -28722,7 +28722,7 @@ class L10nZh extends L10n {
   String get workshopErrorDowngrade => '本机装的版本更新，不会换成旧的。';
 
   @override
-  String get workshopErrorRuntimeMissing => '要先在伙伴小屋里请过一位角色，才能装别的伙伴。';
+  String get workshopErrorAppRuntimeMissing => '这个版本没有内置伙伴运行库，暂时装不了伙伴包。';
 
   @override
   String get workshopErrorReadersBusy => '她正在用着，先离开伙伴小屋或关掉悬浮窗再试。';
