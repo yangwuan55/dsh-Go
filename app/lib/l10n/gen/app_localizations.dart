@@ -3632,6 +3632,30 @@ abstract class L10n {
   /// **'未能更新后台保护，请查看当前状态后重试。'**
   String get backgroundProtectionUpdateFailed;
 
+  /// No description provided for @remoteBackgroundProtectionTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'远程连接保活'**
+  String get remoteBackgroundProtectionTitle;
+
+  /// No description provided for @remoteBackgroundAudioHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'退到后台时播放静音音频，可能增加耗电；系统仍可能暂停连接。'**
+  String get remoteBackgroundAudioHint;
+
+  /// No description provided for @remoteBackgroundLocationHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'仅使用大致位置，需后台授权；不保存或发送坐标，可能增加耗电。'**
+  String get remoteBackgroundLocationHint;
+
+  /// No description provided for @remoteBackgroundLocationPermission.
+  ///
+  /// In zh, this message translates to:
+  /// **'请授予后台位置权限，再开启此选项。'**
+  String get remoteBackgroundLocationPermission;
+
   /// No description provided for @botsFolderGone.
   ///
   /// In zh, this message translates to:
@@ -19505,6 +19529,12 @@ abstract class L10n {
   /// In zh, this message translates to:
   /// **'未开始'**
   String get hubSessionNotStarted;
+
+  /// No description provided for @hubSessionTokenSpeed.
+  ///
+  /// In zh, this message translates to:
+  /// **'tokens/秒'**
+  String get hubSessionTokenSpeed;
 
   /// No description provided for @hubSessionTurnUsage.
   ///
@@ -52446,11 +52476,11 @@ abstract class L10n {
   /// **'本机装的版本更新，不会换成旧的。'**
   String get workshopErrorDowngrade;
 
-  /// No description provided for @workshopErrorRuntimeMissing.
+  /// No description provided for @workshopErrorAppRuntimeMissing.
   ///
   /// In zh, this message translates to:
-  /// **'要先在伙伴小屋里请过一位角色，才能装别的伙伴。'**
-  String get workshopErrorRuntimeMissing;
+  /// **'这个版本没有内置伙伴运行库，暂时装不了伙伴包。'**
+  String get workshopErrorAppRuntimeMissing;
 
   /// No description provided for @workshopErrorReadersBusy.
   ///

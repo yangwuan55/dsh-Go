@@ -2022,6 +2022,20 @@ class L10nEn extends L10n {
       'Could not update background protection. Check the current status and try again.';
 
   @override
+  String get remoteBackgroundProtectionTitle => 'Remote connection protection';
+
+  @override
+  String get remoteBackgroundAudioHint =>
+      'Plays silent audio in the background and may use more battery. The system may still suspend the connection.';
+
+  @override
+  String get remoteBackgroundLocationHint =>
+      'Uses only approximate location and requires background access. Coordinates aren’t saved or sent. This may use more battery.';
+
+  @override
+  String get remoteBackgroundLocationPermission => 'Allow background location access, then turn this option on.';
+
+  @override
   String get botsFolderGone => 'This folder is gone';
 
   @override
@@ -11129,6 +11143,9 @@ class L10nEn extends L10n {
 
   @override
   String get hubSessionNotStarted => 'Not started';
+
+  @override
+  String get hubSessionTokenSpeed => 'tokens/sec';
 
   @override
   String get hubSessionTurnUsage => 'Usage by turn';
@@ -30291,8 +30308,8 @@ class L10nEn extends L10n {
   String get workshopErrorDowngrade => 'The version on this phone is newer and won\'t be replaced with an older one.';
 
   @override
-  String get workshopErrorRuntimeMissing =>
-      'Invite a character in the Companion room first. Then other companions can be installed.';
+  String get workshopErrorAppRuntimeMissing =>
+      'This build has no bundled companion runtime, so a companion pack can\'t be installed.';
 
   @override
   String get workshopErrorReadersBusy =>

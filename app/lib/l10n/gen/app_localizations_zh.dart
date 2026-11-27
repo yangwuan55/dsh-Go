@@ -1909,6 +1909,18 @@ class L10nZh extends L10n {
   String get backgroundProtectionUpdateFailed => '未能更新后台保护，请查看当前状态后重试。';
 
   @override
+  String get remoteBackgroundProtectionTitle => '远程连接保活';
+
+  @override
+  String get remoteBackgroundAudioHint => '退到后台时播放静音音频，可能增加耗电；系统仍可能暂停连接。';
+
+  @override
+  String get remoteBackgroundLocationHint => '仅使用大致位置，需后台授权；不保存或发送坐标，可能增加耗电。';
+
+  @override
+  String get remoteBackgroundLocationPermission => '请授予后台位置权限，再开启此选项。';
+
+  @override
   String get botsFolderGone => '这个文件夹已经不在了';
 
   @override
@@ -10519,6 +10531,9 @@ class L10nZh extends L10n {
 
   @override
   String get hubSessionNotStarted => '未开始';
+
+  @override
+  String get hubSessionTokenSpeed => 'tokens/秒';
 
   @override
   String get hubSessionTurnUsage => '每轮用量';
@@ -28707,7 +28722,7 @@ class L10nZh extends L10n {
   String get workshopErrorDowngrade => '本机装的版本更新，不会换成旧的。';
 
   @override
-  String get workshopErrorRuntimeMissing => '要先在伙伴小屋里请过一位角色，才能装别的伙伴。';
+  String get workshopErrorAppRuntimeMissing => '这个版本没有内置伙伴运行库，暂时装不了伙伴包。';
 
   @override
   String get workshopErrorReadersBusy => '她正在用着，先离开伙伴小屋或关掉悬浮窗再试。';

@@ -513,4 +513,47 @@ void main() {
     await packages.remove(installed.singleWhere((item) => item.receipt.id == 'cat'));
     expect([for (final entry in await store.roster()) entry.workshop?.id], ['dog', null]);
   });
+
+  test('a Workshop companion installs on a phone with no companion or runtime yet', () async {
+    final bundled = workshopZip(temp, {...workshopRuntime(), ...workshopCharacter(name: 'Whale')});
+    final packages = LocalWorkshopPackages(
+      pets: PetLibrary(() async => Directory('${temp.path}/pets')),
+      companion: store,
+      bundledPack: () async => bundled.readAsBytes(),
+    );
+    expect(await store.installed(), isFalse);
+    await packages.install(workshopZip(temp, workshopCharacter(name: 'Workshop cat')), receipt(), replaceExisting: false);
+
+    expect((await store.workshopReceipt())!.id, 'cat', reason: 'the Workshop character is the active one');
+    expect(await store.unavailableReason(), isNull, reason: 'runtime, model and references are complete');
+    for (final name in ['live2dcubismcore.min.js', 'cubism-framework.js']) {
+      expect(File('${store.pack.path}/runtime/$name').existsSync(), isTrue, reason: 'the stage loads $name from the pack');
+    }
+  });
+
+  test('a build with no bundled runtime says so and does not leave a dead pack', () async {
+    final packages = LocalWorkshopPackages(
+      pets: PetLibrary(() async => Directory('${temp.path}/pets')),
+      companion: store,
+      bundledPack: () async => null,
+    );
+    await expectLater(packages.install(workshopZip(temp, workshopCharacter()), receipt(), replaceExisting: false),
+      workshopError('workshop_app_runtime_missing'));
+    expect(await store.installed(), isFalse);
+    expect(await store.workshopReceipt(), isNull);
+  });
+
+  test('a rejected archive does not install the bundled companion first', () async {
+    final bundled = workshopZip(temp, {...workshopRuntime(), ...workshopCharacter(name: 'Whale')});
+    final packages = LocalWorkshopPackages(
+      pets: PetLibrary(() async => Directory('${temp.path}/pets')),
+      companion: store,
+      bundledPack: () async => bundled.readAsBytes(),
+    );
+    final bad = File('${temp.path}/bad.zip')..writeAsStringSync('not a zip');
+    await expectLater(packages.install(bad, receipt(), replaceExisting: false),
+      throwsA(isA<CompanionPackException>().having((e) => e.problem, 'problem', CompanionPackProblem.notAPack)));
+    expect(await store.installed(), isFalse, reason: 'nothing was invited by a failed install');
+    expect(await store.workshopReceipt(), isNull);
+  });
 }

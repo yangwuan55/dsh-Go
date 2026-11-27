@@ -72,10 +72,27 @@ abstract interface class WorkshopPackages {
 }
 
 class LocalWorkshopPackages implements WorkshopPackages {
-  const LocalWorkshopPackages({required this.pets, required this.companion, this.themes});
+  const LocalWorkshopPackages({required this.pets, required this.companion, this.themes,
+    this.bundledPack = loadBundledCompanionPack});
   final PetLibrary pets;
   final CompanionPackStore companion;
   final ThemeLibrary? themes;
+  final Future<Uint8List?> Function() bundledPack;
+
+  /// A Companion room visit is not a prerequisite: when the Workshop pack has
+  /// no runtime, seed the pinned one from the app and let the installer copy it.
+  /// The bundled character ends up on the shelf, not in the room.
+  Future<void> _seedBundledRuntime() async {
+    final bytes = await bundledPack();
+    if (bytes == null) workshopInvalid('workshop_app_runtime_missing');
+    final runtime = File('${companion.root.parent.path}/companion-runtime-${DateTime.now().microsecondsSinceEpoch}.zip');
+    try {
+      await runtime.writeAsBytes(bytes, flush: true);
+      await companion.installBundled(runtime.path);
+    } finally {
+      if (await runtime.exists()) await runtime.delete();
+    }
+  }
 
   @override
   Future<List<WorkshopLocalEntry>> installed() async {
@@ -139,16 +156,7 @@ class LocalWorkshopPackages implements WorkshopPackages {
           // no runtime, so the one inside the app goes in first, as a file
           // import does (she then waits on the shelf).
           if (error.problem != CompanionPackProblem.noRuntime) rethrow;
-          final bundled = await loadBundledCompanionPack();
-          if (bundled == null) rethrow;
-          final stamp = DateTime.now().microsecondsSinceEpoch;
-          final runtime = File('${companion.root.parent.path}/companion-runtime-$stamp.zip');
-          try {
-            await runtime.writeAsBytes(bundled, flush: true);
-            await companion.installBundled(runtime.path);
-          } finally {
-            if (await runtime.exists()) await runtime.delete();
-          }
+          await _seedBundledRuntime();
           await companion.install(archive.path, workshop: receipt, replaceExisting: replaceExisting);
         }
         return WorkshopInstalled(localId: 'companion', receipt: receipt);
@@ -529,7 +537,7 @@ WorkshopException workshopLocalError(Object error) {
   } else if (error is CompanionPackException) {
     errno = error.osErrorCode;
     if (error.detail == 'companion_readers_busy') return const WorkshopException('workshop_readers_busy');
-    if (error.problem == CompanionPackProblem.noRuntime) return const WorkshopException('workshop_runtime_missing');
+    if (error.problem == CompanionPackProblem.noRuntime) return const WorkshopException('workshop_app_runtime_missing');
     if (error.detail != null && RegExp(r'^companion_[a-z_]+$').hasMatch(error.detail!)) return WorkshopException('workshop_${error.detail}');
     if (error.problem != CompanionPackProblem.storage) return WorkshopException('workshop_companion_${_problemName(error.problem.name)}');
   } else if (error is FileSystemException) {
