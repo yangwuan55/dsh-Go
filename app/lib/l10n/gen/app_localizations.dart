@@ -52479,7 +52479,7 @@ abstract class L10n {
   /// No description provided for @workshopErrorAppRuntimeMissing.
   ///
   /// In zh, this message translates to:
-  /// **'这个版本没有内置伙伴运行库，暂时装不了伙伴包。'**
+  /// **'这个版本没有伙伴运行库。请先导入一份带运行库的完整伙伴素材包，再安装工坊伙伴包。'**
   String get workshopErrorAppRuntimeMissing;
 
   /// No description provided for @workshopErrorReadersBusy.

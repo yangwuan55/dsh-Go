@@ -16,6 +16,7 @@ import 'package:dsh_app/companion/companion_public_lookup.dart';
 import 'package:dsh_app/companion/companion_state.dart';
 import 'package:dsh_app/companion/companion_voice_source.dart';
 import 'package:dsh_app/companion/companion_widget.dart';
+import 'package:dsh_app/diagnostics/app_error_log.dart';
 import 'package:dsh_app/links/launcher_entries.dart';
 import 'package:dsh_app/pets/pet_mood.dart';
 import 'package:dsh_app/pets/pet_signals.dart';
@@ -45,6 +46,9 @@ import 'package:dsh_app/ui/theme/app_theme.dart';
 import 'package:dsh_app/ui/workspace/directory_picker.dart';
 import 'package:dsh_client/dsh_client.dart'
     show
+        DshCarrierRefusedException,
+        DshHttpException,
+        DshRemoteException,
         CompanionAffinityStore,
         CompanionMemory,
         CompanionMemoryScopeStore,
@@ -648,8 +652,52 @@ class _OfflineTaskModel {
   }
 }
 
+class _ThrowingDescription {
+  @override
+  String toString() => throw StateError('no description');
+}
+
 void main() {
   setUp(() => SharedPreferences.setMockInitialValues({}));
+
+  group('send failure diagnostics', () {
+    test('a rejected request leaves a greppable type, code and status', () {
+      final line = companionSendFailureDiagnostic(
+        DshRemoteException('gateway/internal', 'host exploded', {'httpStatus': 503}),
+      );
+      expect(line, contains('CompanionSendDiag'));
+      expect(line, contains('type=DshRemoteException'));
+      expect(line, contains('errorCode=gateway/internal'));
+      expect(line, contains('httpStatus=503'));
+    });
+
+    test('a transport failure with no code still says it has none', () {
+      final line = companionSendFailureDiagnostic(DshHttpException(401, 'token refused'));
+      expect(line, contains('type=DshHttpException'));
+      expect(line, contains('errorCode=n/a'));
+      expect(line, contains('httpStatus=401'));
+    });
+
+    test('a credential inside the error text is masked before it is logged', () {
+      const key = 'sk-4c1f0e7b9a2d4e6f8a1b3c5d7e9fa3f9';
+      final line = companionSendFailureDiagnostic(StateError('rejected $key'));
+      expect(line, isNot(contains(key)));
+      expect(line, contains('sk-•••'));
+    });
+
+    test('a refused carrier still reports its stable code', () {
+      final line = companionSendFailureDiagnostic(
+        const DshCarrierRefusedException('PEER_IDENTITY_MISMATCH', 'refused'),
+      );
+      expect(line, contains('errorCode=PEER_IDENTITY_MISMATCH'));
+    });
+
+    test('an error whose description throws keeps the failure bubble intact', () {
+      final line = companionSendFailureDiagnostic(_ThrowingDescription());
+      expect(line, contains('type=_ThrowingDescription'));
+      expect(line, contains('<description unavailable>'));
+    });
+  });
 
   group('chrome', () {
     testWidgets('the name plate says what she is doing', (tester) async {
@@ -7474,6 +7522,8 @@ void main() {
         );
         db.close();
 
+        final diagnosticsBefore =
+            appErrorLog.snapshot().where((record) => record.message.contains('CompanionSendDiag')).length;
         await say(tester, '我改学长笛了');
         expect(asked, isEmpty);
         expect(memory.store.messages(), isEmpty);
@@ -7481,6 +7531,9 @@ void main() {
         expect(memory.store.archive['next_seq'], before);
         expect(tester.widget<TextField>(find.byType(TextField)).controller!.text, '我改学长笛了');
         expect(find.text('这句话没送出去，要不要再说一次？'), findsOneWidget);
+        final diagnostics = appErrorLog.snapshot().where((record) => record.message.contains('CompanionSendDiag'));
+        expect(diagnostics.length, greaterThan(diagnosticsBefore));
+        expect(diagnostics.last.message, contains('errorCode=n/a'));
 
         final recovered = sqlite3.open('${root.path}/memory.sqlite');
         recovered.execute('DROP TRIGGER reject_source');

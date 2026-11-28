@@ -635,9 +635,32 @@ Future<void> _installWithOutput(_InstallArgs args, OutputFileStream Function(Str
         throw const CompanionPackException(CompanionPackProblem.runtimeMismatch);
       }
     } else {
-      final current = Directory('${live.path}/runtime');
-      if (!await current.exists()) throw const CompanionPackException(CompanionPackProblem.noRuntime);
-      await _copy(current, Directory('${staging.path}/runtime'));
+      // A Workshop character-only pack may arrive after the active pack was
+      // removed; any other installed pack still owns a usable runtime.
+      final sources = <Directory>[Directory('${live.path}/runtime')];
+      final shelf = Directory('$rootPath/shelf');
+      if (await shelf.exists()) {
+        await for (final folder in shelf.list(followLinks: false)) {
+          if (folder is Directory) sources.add(Directory('${folder.path}/runtime'));
+        }
+      }
+      Directory? source;
+      for (final candidate in sources) {
+        if (!await File('${candidate.path}/live2dcubismcore.min.js').exists()) continue;
+        final hashes = <String, String>{};
+        await for (final file in candidate.list(recursive: true, followLinks: false)) {
+          if (file is File) {
+            hashes['runtime/${file.path.substring(candidate.path.length + 1)}'] =
+                (await sha256.bind(file.openRead()).first).toString();
+          }
+        }
+        if (runtimeDigest(hashes) == expected) {
+          source = candidate;
+          break;
+        }
+      }
+      if (source == null) throw const CompanionPackException(CompanionPackProblem.noRuntime);
+      await _copy(source, Directory('${staging.path}/runtime'));
     }
     if (!characterFiles.any((f) => f.toLowerCase().endsWith('.model3.json'))) {
       throw const CompanionPackException(CompanionPackProblem.noModel);

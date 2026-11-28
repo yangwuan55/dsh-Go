@@ -17,7 +17,7 @@
 #   -n, --build-number N             use 2..2100000000 instead of the build minute (never lower than installed)
 #   --build-name X.Y.Z               version name instead of app/pubspec.yaml's
 #   --keep-daemon                    leave the Gradle daemon running afterwards
-#   --no-companion                   release without the licensed companion pack
+#   --no-companion                   build without the licensed companion pack
 #   --beta                           embed the beta channel token (internal builds only)
 #   --side                           test build that installs next to the released app
 #                                    (package ...dsh_app.test, named DSH Go 测试, own data)
@@ -30,7 +30,8 @@
 # (lib/update/update_config.dart) for internal builds; the token file is
 # ~/keys/dshgo-beta-channel.token (mode 600), DSH_BETA_TOKEN_FILE points
 # elsewhere. Never printed, never part of a public release.
-# Release builds carry the companion pack, which stays out of the repository:
+# Builds carry the companion pack when it is available (a Workshop companion
+# needs its runtime even in a debug build). It stays out of the repository:
 # app/assets/companion/whale-girl.zip, else ~/keys/dsh-go/companion-pack-whale-girl.zip
 # (DSH_COMPANION_PACK points elsewhere), credited by tooling/companion_pack.py.
 # This script takes no machine locks; callers add their own.
@@ -73,7 +74,7 @@ case "$flavor" in
   all) flavors=(arm64 x64) ;;
   *) die "flavor is arm64, x64 or all: $flavor" ;;
 esac
-for arg in "${extra[@]}"; do
+for arg in ${extra[@]+"${extra[@]}"}; do
   case "$arg" in
     # The selected mode also controls the runtime preflight below.
     --build-number* | --build-name* | --flavor* | --target-platform* | \
@@ -137,7 +138,7 @@ for f in "${flavors[@]}"; do
   [[ -n $target ]] && cmd+=(-t "$target")
   ((beta)) && cmd+=("--dart-define-from-file=$beta_json")
   ((star_on)) && cmd+=("--dart-define-from-file=../tooling/star-prompt-on.json")
-  cmd+=("${extra[@]}")
+  cmd+=(${extra[@]+"${extra[@]}"})
   commands+=("$(printf '%q ' "${cmd[@]}")")
 done
 
@@ -168,7 +169,11 @@ if ! command -v flutter >/dev/null 2>&1; then
   command -v flutter >/dev/null 2>&1 || die "flutter is not on PATH"
 fi
 # The companion pack (docs/design/companion.md); a fresh checkout has none.
-((companion)) && [[ $mode == release ]] || companion=0
+# Every mode carries it when available: Workshop companions need its runtime.
+if ((companion)) && [[ $mode != release && ! -f $APP/assets/companion/whale-girl.zip ]]; then
+  pack=${DSH_COMPANION_PACK-$HOME/keys/dsh-go/companion-pack-whale-girl.zip}
+  [[ -f $pack || -f $APP/build/.whale-girl.zip.held ]] || companion=0
+fi
 if ((companion)) && [[ ! -f $APP/assets/companion/whale-girl.zip ]]; then
   pack=${DSH_COMPANION_PACK-$HOME/keys/dsh-go/companion-pack-whale-girl.zip}
   # A killed --no-companion build may have left the only copy here.

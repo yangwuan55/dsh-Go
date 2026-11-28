@@ -681,7 +681,14 @@ class _CompanionAgentVisit {
     bool returnToApp = false,
     void Function(MemoryRow)? onCommitted,
   }) async {
-    if (!active || clearing || !originCurrent() || raw.trim().isEmpty || (preparing && !replacePreparing)) return;
+    final originOk = originCurrent();
+    if (!active || clearing || !originOk || raw.trim().isEmpty || (preparing && !replacePreparing)) {
+      logCompanionSend(
+        'submit_skip reason=guard active=$active clearing=$clearing originCurrent=$originOk '
+        'empty=${raw.trim().isEmpty} preparing=$preparing replacePreparing=$replacePreparing',
+      );
+      return;
+    }
     final noticeReply = notices?.replyContext(raw, retrySource: retrySource?['id'] as String?);
     notices?.invalidate(keepReply: true);
     lastUserInteractionAt = DateTime.now();
@@ -724,7 +731,10 @@ class _CompanionAgentVisit {
     try {
       final submittedAt = DateTime.now();
       final owner = await openMemory();
-      if (!current()) return;
+      if (!current()) {
+        logCompanionSend('submit_skip reason=after_open_memory');
+        return;
+      }
       owner.cancelWork();
       settled = Completer<void>();
       owner.retainReceipt(settled.future);
@@ -738,6 +748,7 @@ class _CompanionAgentVisit {
       if (reuse && (inheritedRetry == null || !identical(inheritedRetry.memory, owner))) {
         // A closed/used turn is not a new model-planning opportunity. Its
         // original receipts and manual task/memory entry points stay intact.
+        logCompanionSend('submit_skip reason=stale_retry characterId=$characterId');
         failed(_agentRetryClosed);
         return;
       }
@@ -757,7 +768,10 @@ class _CompanionAgentVisit {
           // Never guess an IANA zone from the local numeric offset.
         }
       }
-      if (!current()) return;
+      if (!current()) {
+        logCompanionSend('submit_skip reason=after_clock');
+        return;
+      }
       final source = retrySource = reuse
           ? previous
           : owner.store.submitMessage(
@@ -812,7 +826,10 @@ class _CompanionAgentVisit {
       );
       lastSpokenAt = now;
       await ref.read(companionPersonaProvider.notifier).ready;
-      if (!current()) return;
+      if (!current()) {
+        logCompanionSend('submit_skip reason=after_persona');
+        return;
+      }
       final persona = ref.read(companionPersonaProvider);
       final system = companionLightSystem(
         persona: companionPersona(
@@ -900,14 +917,22 @@ class _CompanionAgentVisit {
             agent.describePhoto(owner: owner, image: image, question: question, isCurrent: current),
       );
       if (noticeReply?.draftOnly != true) await phoneTools.prepare();
-      if (!current()) return;
+      if (!current()) {
+        logCompanionSend('submit_skip reason=after_phone_prepare');
+        return;
+      }
       if (noticeReply != null) {
         await notices?.refresh();
         if (!current() || notices?.replyCurrent(noticeReply) != true) {
+          logCompanionSend('submit_throw reason=notice_reply_changed');
           throw const DshClosedException('Notice reply context changed');
         }
       }
       preparing = false;
+      logCompanionSend(
+        'submit_dispatch characterId=$characterId role=${characterSourceKey ?? 'n/a'} '
+        'light=$light useSession=$useSession sourceId=${source['id']}',
+      );
       // Notification replies carry a displayed draft and native confirmation.
       final notificationWindow = residentUi;
       final work = agent.say(
@@ -955,6 +980,10 @@ class _CompanionAgentVisit {
         if (turnContext.hasClock) lastClockAt = turnContext.sampledAt;
       }
       if (submittedRun.error case final error?) {
+        logCompanionSend(
+          'submit_error error=$error type=${error.runtimeType} ms=${DateTime.now().difference(submittedAt).inMilliseconds} '
+          'characterId=$characterId sourceId=${source['id']}',
+        );
         // say has returned after its physical request's first cancel drain.
         // No tool callback has entered, so the original clock and budget can
         // survive until a later explicit click in this same live visit.
@@ -980,7 +1009,8 @@ class _CompanionAgentVisit {
         phoneAttempt = null;
       }
       queueExtraction();
-    } on Object catch (error) {
+    } on Object catch (error, stack) {
+      logCompanionSend('submit_throw error=$error type=${error.runtimeType} characterId=$characterId stack=$stack');
       if (current()) failed(error, retry: raw);
     } finally {
       // Fresh foreground work is handed to its original detail route only

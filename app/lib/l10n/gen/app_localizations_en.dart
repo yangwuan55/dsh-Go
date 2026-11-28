@@ -30309,7 +30309,7 @@ class L10nEn extends L10n {
 
   @override
   String get workshopErrorAppRuntimeMissing =>
-      'This build has no bundled companion runtime, so a companion pack can\'t be installed.';
+      'This build has no companion runtime. Import a full companion pack with a runtime first, then install the Workshop companion.';
 
   @override
   String get workshopErrorReadersBusy =>

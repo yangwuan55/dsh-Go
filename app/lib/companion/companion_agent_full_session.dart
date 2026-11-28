@@ -39,7 +39,11 @@ extension on _CompanionAgentVisit {
       );
       if (!current()) return;
       if (retry != null && retry.sessionId != binding.sessionId) throw _agentRetryClosed;
-      if (binding.inlinePersona) throw const CompanionHostError(CompanionHostFailure.unavailable);
+      // A persona-only session has no context route, but its prompt still works.
+      // The stateless Host route needs the same preset, so it cannot substitute.
+      logCompanionSend(
+        'session_route inlinePersona=${binding.inlinePersona} session=${binding.sessionId}',
+      );
       var session = fullSession;
       if (session == null || session.id != binding.sessionId || !identical(session.client, connection.client)) {
         session?.close();
@@ -112,7 +116,10 @@ class _CompanionFullSession {
   Future<void> send(_CompanionAgentRun run, bool Function() current, {String? retryId}) async {
     final controller = chat;
     final provider = chatProvider(id);
+    final startedAt = DateTime.now();
+    logCompanionSend('full_send_start session=$id retry=${retryId ?? 'n/a'} characterId=${visit.characterId}');
     if (!await controller.waitForSync(isCurrent: current) || !current()) {
+      logCompanionSend('full_send_skip reason=wait_for_sync session=$id');
       if (current()) throw const CompanionHostError(CompanionHostFailure.disconnected);
       return;
     }
@@ -121,8 +128,17 @@ class _CompanionFullSession {
     final selection = modelGeneration;
     final routeCurrent = run.modelCurrent!;
     run.modelCurrent = () => routeCurrent() && modelGeneration == selection;
-    final cap = await client.companionPromptCapability(id);
-    if (!current()) return;
+    CompanionPromptCapability? cap;
+    try {
+      cap = await client.companionPromptCapability(id);
+    } on DshRemoteException catch (error) {
+      // A persona-only session refuses context with 409; the plain prompt stays usable.
+      if (error.code != 'companion/wrong-session') rethrow;
+    }
+    if (!current()) {
+      logCompanionSend('full_send_skip reason=after_capability session=$id');
+      return;
+    }
     if (run.assistantPage != null && cap?.selectedPage != true) {
       throw const CompanionHostError(CompanionHostFailure.unavailable);
     }
@@ -271,7 +287,11 @@ class _CompanionFullSession {
         mode: retryId == null ? SendMode.interrupt : SendMode.now,
         originalRequestId: retryId,
         deliveryAllowed: () {
-          if (!current()) return false;
+          if (!current()) {
+            logCompanionSend('full_send_skip reason=delivery_not_allowed session=$id');
+            return false;
+          }
+          logCompanionSend('full_send_before_prompt requestId=$requestId session=$id');
           // _deliver invokes this synchronously immediately before client.prompt.
           visit.hostAttempt = (
             sourceId: run.source['id']! as String,
@@ -284,8 +304,12 @@ class _CompanionFullSession {
           return true;
         },
         beforeDeliver: (req) async {
-          if (!current()) return false;
+          if (!current()) {
+            logCompanionSend('full_send_skip reason=before_deliver_stale session=$id');
+            return false;
+          }
           requestId = req;
+          logCompanionSend('full_send_before_deliver requestId=$req session=$id');
           try {
             if (cap != null) await prepare(run, cap, req, current);
           } on Object catch (error) {
@@ -317,12 +341,24 @@ class _CompanionFullSession {
           return current();
         },
       );
+      final chatError = visit.ref.mounted ? visit.ref.read(provider).error : null;
+      logCompanionSend(
+        'full_send_result accepted=$accepted ms=${DateTime.now().difference(startedAt).inMilliseconds} '
+        'requestId=${requestId ?? 'n/a'} session=$id error=${chatError ?? 'n/a'} prepareError=${prepareError ?? 'n/a'}',
+      );
       if (!accepted && requestId != null && !controller.awaitingPromptOutcome(requestId!)) clearStop?.call();
       if (!current()) return;
       if (!accepted && prepareError != null) throw prepareError!;
       if (!accepted) throw CompanionHostError(CompanionHostFailure.requestFailed, visit.ref.read(provider).error);
       observeTurn(visit.ref.read(provider));
       await ended.future;
+    } on Object catch (error, stack) {
+      final body = error is DshHttpException ? ' body=${error.body}' : '';
+      logCompanionSend(
+        'full_send_throw type=${error.runtimeType} error=$error$body requestId=${requestId ?? 'n/a'} '
+        'session=$id stack=$stack',
+      );
+      Error.throwWithStackTrace(error, stack);
     } finally {
       if (identical(observe, listener)) observe = null;
       endInteraction();

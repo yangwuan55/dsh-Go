@@ -104,6 +104,17 @@ apk.write_bytes(b'fake APK: shell flow only')
         self.assertEqual(placed.read_bytes(), b"placed")
         self.assertFalse((self.root / "app/build/.whale-girl.zip.held").exists())
 
+    def test_debug_places_the_companion_pack_when_available(self):
+        result = self.run_script("--debug")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(self.pack_file.read_text().splitlines(), ["place " + str(self.root / "whale-girl-source.zip")])
+
+    def test_debug_without_a_pack_still_builds(self):
+        self.env["DSH_COMPANION_PACK"] = str(self.root / "missing.zip")
+        result = self.run_script("--debug")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertFalse(self.pack_file.exists())
+
     def test_exit_cleanup_leaves_daemons_outside_gradle_stop_alive(self):
         android = self.root / "app/android"
         android.mkdir()

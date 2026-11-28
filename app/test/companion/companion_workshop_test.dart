@@ -531,6 +531,41 @@ void main() {
     }
   });
 
+  test('a shelved pack lends its runtime to a Workshop companion when no pack is active', () async {
+    await seed();
+    await store.install(workshopZip(temp, workshopCharacter(name: 'Shelved')).path);
+    await store.remove();
+    expect(await store.installed(), isFalse, reason: 'only the shelved pack has a runtime now');
+
+    final packages = LocalWorkshopPackages(
+      pets: PetLibrary(() async => Directory('${temp.path}/pets')),
+      companion: store,
+      bundledPack: () async => null,
+    );
+    await packages.install(workshopZip(temp, workshopCharacter(name: 'Workshop cat')), receipt(), replaceExisting: false);
+
+    expect((await store.workshopReceipt())!.id, 'cat');
+    expect(await store.unavailableReason(), isNull, reason: 'the Workshop pack has a complete runtime');
+    expect(File('${store.pack.path}/runtime/live2dcubismcore.min.js').existsSync(), isTrue);
+  });
+
+  test('a shelved pack with a stale runtime is not lent to a Workshop companion', () async {
+    await seed();
+    await store.install(workshopZip(temp, workshopCharacter(name: 'Shelved')).path);
+    await store.remove();
+    final shelved = Directory('${store.root.path}/shelf').listSync().whereType<Directory>().single;
+    File('${shelved.path}/runtime/cubism-framework.js').writeAsStringSync('stale runtime');
+
+    final packages = LocalWorkshopPackages(
+      pets: PetLibrary(() async => Directory('${temp.path}/pets')),
+      companion: store,
+      bundledPack: () async => null,
+    );
+    await expectLater(packages.install(workshopZip(temp, workshopCharacter()), receipt(), replaceExisting: false),
+      workshopError('workshop_app_runtime_missing'));
+    expect(await store.installed(), isFalse);
+  });
+
   test('a build with no bundled runtime says so and does not leave a dead pack', () async {
     final packages = LocalWorkshopPackages(
       pets: PetLibrary(() async => Directory('${temp.path}/pets')),

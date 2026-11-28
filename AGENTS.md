@@ -21,7 +21,7 @@ docs/                        架构、发布、路线图、用户指南（鸿蒙
 
 ## 命令
 
-按改动面选择验证，在 PR/报告里写实际执行的命令和结果。完整说明见 [CONTRIBUTING.md](CONTRIBUTING.md)。
+按改动面选择验证，在 PR/报告里写实际执行的命令和结果。完整说明见 [CONTRIBUTING.md](CONTRIBUTING.md)。**本地/子代理默认只跑受影响范围的定向测试**：指定测试文件或用 `--plain-name` 限定用例，不要跑整目录或全量测试；全量验证交给 CI。
 
 ```bash
 (cd app && flutter pub get && flutter analyze && flutter test)   # Flutter 应用

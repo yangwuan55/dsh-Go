@@ -39,6 +39,9 @@ import '../../companion/companion_state.dart';
 import '../../companion/companion_voice.dart';
 import '../../companion/companion_voice_source.dart';
 import '../../companion/companion_widget.dart';
+import '../../diagnostics/app_error_log.dart';
+import '../../diagnostics/companion_send_log.dart';
+import '../../diagnostics/redact.dart';
 import '../../l10n/l10n.dart';
 import '../../links/launcher_entries.dart';
 import '../../notify/chat_alerts.dart' show CompanionAlertDelivery, companionHostKey;
@@ -103,6 +106,43 @@ import 'companion_tasks_page.dart';
 const _packRemovedKey = 'companion_pack_removed';
 const _hintDoneKey = 'companion_touch_hint_done';
 const _homeHintDoneKey = 'companion_home_hint_done';
+
+/// One greppable line for a send that ended in the generic "not sent" bubble.
+String companionSendFailureDiagnostic(Object error, {StackTrace? stack}) {
+  final (String? code, Object? status, String? body) = switch (error) {
+    DshRemoteException(:final code, :final details) => (code, details['httpStatus'], null),
+    DshPhoneException(:final code, :final httpStatus) => (code, httpStatus, null),
+    CompanionAuxiliaryFailure(:final code, :final httpStatus) => (code, httpStatus, null),
+    CompanionLookupFailure(:final code, :final httpStatus) => (code, httpStatus, null),
+    DshHttpException(:final statusCode, :final body) => (null, statusCode, body),
+    DshCarrierRefusedException(:final code) => (code, null, null),
+    _ => (null, null, null),
+  };
+  String description;
+  try {
+    description = error.toString();
+  } catch (_) {
+    description = '<description unavailable>';
+  }
+  final message = redactDiagnostics(description);
+  final line = StringBuffer(
+    'CompanionSendDiag type=${error.runtimeType} error=$message errorCode=${code ?? 'n/a'} httpStatus=${status ?? 'n/a'}',
+  );
+  if (body case final String value when value.isNotEmpty) {
+    final clipped = value.length > 600 ? '${value.substring(0, 600)}…' : value;
+    line.write(' body=${redactDiagnostics(clipped)}');
+  }
+  if (stack != null) {
+    line.write(' stack=${redactDiagnostics(stack.toString().split('\n').take(12).join('\n'))}');
+  }
+  return line.toString();
+}
+
+void _logCompanionSendFailure(Object error) {
+  final line = companionSendFailureDiagnostic(error, stack: StackTrace.current);
+  appErrorLog.record(AppErrorSource.session, line, StackTrace.empty);
+  logCompanionSend('ui_failed $line');
+}
 
 enum _Phase { checking, setup, stage, failed }
 
@@ -713,7 +753,9 @@ class _CompanionPageState extends ConsumerState<CompanionPage>
     _stage.command('emotion', {'name': 'worried', 'hold': 3000});
     // The line did not become her conversation: it must not stay above her.
     _myLine = null;
-    _showBubble(_failureText(error), hold: const Duration(seconds: 6), error: true, clearTasks: false);
+    final text = _failureText(error);
+    if (text == context.l10n.companionSendFailed) _logCompanionSendFailure(error);
+    _showBubble(text, hold: const Duration(seconds: 6), error: true, clearTasks: false);
   }
 
   @override
@@ -2419,7 +2461,23 @@ class _CompanionPageState extends ConsumerState<CompanionPage>
 
   Future<void> _send() async {
     final raw = _input.text;
-    if (raw.trim().isEmpty || _attachment.preparing || !_attachment.isAttached) return;
+    if (raw.trim().isEmpty || _attachment.preparing || !_attachment.isAttached) {
+      logCompanionSend(
+        'click_skip reason=guard empty=${raw.trim().isEmpty} preparing=${_attachment.preparing} attached=${_attachment.isAttached}',
+      );
+      return;
+    }
+    final key = _characterSourceKey;
+    final packSource = switch (key) {
+      null => 'none',
+      final String value when value.startsWith('workshop:') => 'workshop',
+      final String value when value.startsWith('builtin:') => 'bundled',
+      _ => 'new',
+    };
+    logCompanionSend(
+      'click pack=$packSource keyNull=${key == null} key=${key ?? 'n/a'} '
+      'characterId=${_attachment.characterId} name=${_character.name} session=${_sessionId ?? 'n/a'}',
+    );
     final page = _assistantPage;
     final returnToApp = _assistantReturnToApp;
     _acted();
@@ -2428,7 +2486,13 @@ class _CompanionPageState extends ConsumerState<CompanionPage>
     if (_voice.active || _voice.cancelling) {
       final current = _currentRoom();
       await _voice.cancel();
-      if (!mounted || !current() || _attachment.preparing) return;
+      final stillCurrent = current();
+      if (!mounted || !stillCurrent || _attachment.preparing) {
+        logCompanionSend(
+          'click_skip reason=voice_cancel mounted=$mounted current=$stillCurrent preparing=${_attachment.preparing}',
+        );
+        return;
+      }
     }
     _notesSelectionRoutes.clear();
     _bubbleTimer?.cancel();
@@ -2444,6 +2508,7 @@ class _CompanionPageState extends ConsumerState<CompanionPage>
     });
     _stage.command('mood', {'mood': 'thinking'});
     await _attachment.submit(raw, assistantPage: page, returnToApp: returnToApp);
+    logCompanionSend('click_done submitted');
   }
 
   /// 语音通话 with her: the call page over the room, her as its backdrop,

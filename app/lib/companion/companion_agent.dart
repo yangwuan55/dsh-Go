@@ -12,6 +12,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
 
+import '../diagnostics/companion_send_log.dart';
 import '../l10n/l10n.dart';
 import '../notify/chat_alerts.dart' show companionHostKey;
 import '../state/chat_state.dart';

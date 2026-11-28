@@ -11,7 +11,8 @@
 //   ├── app-evidence.json  bounded failure evidence the native side kept
 //   ├── engine.log         recent engine output
 //   ├── failure.log        output around the last failure (when there is one)
-//   └── app-errors.json    the app's own error log (when there are errors)
+//   ├── app-errors.json    the app's own error log (when there are errors)
+//   └── companion-send.log the companion send chain (when there were sends)
 //
 // Every string goes through `redactDiagnostics` on the way in.
 
@@ -31,6 +32,7 @@ import '../state/phone_state.dart' show phoneChannelProvider;
 import '../state/voice_settings.dart';
 import 'diagnostics_channel.dart';
 import 'app_error_log.dart';
+import 'companion_send_log.dart';
 import 'redact.dart';
 import 'system_ime_diagnostics.dart';
 import 'system_ime_evidence.dart';
@@ -53,6 +55,7 @@ class DiagnosticsSnapshot {
     this.engineLog = const [],
     this.failureLog = const [],
     this.appErrors = const [],
+    this.companionSendLog = const [],
     this.systemIme,
   });
 
@@ -72,6 +75,7 @@ class DiagnosticsSnapshot {
   final List<String> engineLog;
   final List<String> failureLog;
   final List<AppErrorRecord> appErrors;
+  final List<String> companionSendLog;
 
   /// Only a deliberate manual publication/export includes retained opt-in evidence.
   final SystemImeEvidence? systemIme;
@@ -189,6 +193,7 @@ abstract final class DiagnosticsBundle {
       if (s.engineLog.isNotEmpty) text('engine.log', log(s.engineLog)),
       if (s.failureLog.isNotEmpty) text('failure.log', log(s.failureLog)),
       if (s.appErrors.isNotEmpty) jsonFile('app-errors.json', s.appErrors.map((error) => error.toJson()).toList()),
+      if (s.companionSendLog.isNotEmpty) text('companion-send.log', log(s.companionSendLog)),
     ];
   }
 
@@ -240,6 +245,7 @@ Future<DiagnosticsSnapshot> collectDiagnostics(Ref ref, DateTime at, {bool inclu
     engineLog: engineLog,
     failureLog: failureLog,
     appErrors: appErrorLog.snapshot(),
+    companionSendLog: await attempt(readCompanionSendLog, const <String>[]),
     systemIme: systemIme?.evidence,
   );
 }

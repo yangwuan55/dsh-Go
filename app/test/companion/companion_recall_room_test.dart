@@ -46,6 +46,7 @@ class _Bridge extends DshConnection {
   bool failRevoke = false;
   bool chatUsage = false;
   bool phoneMemory = true;
+  bool hasPreset = true;
   final prepared = <Map<String, Object?>>[];
   final boundSessions = <String>{};
   final revokes = <Map<String, Object?>>[];
@@ -99,7 +100,11 @@ class _Bridge extends DshConnection {
     if (path.endsWith('/memories')) {
       return json({'v': 1, 'storeId': _store, 'revision': 0, 'memoryRevision': 0, 'memories': []});
     }
-    if (path.endsWith('/prompt-context')) return json(capability(query!['sessionId']!));
+    if (path.endsWith('/prompt-context')) {
+      return hasPreset
+          ? json(capability(query!['sessionId']!))
+          : json({'error': {'code': 'companion/wrong-session', 'message': 'no full preset'}}, status: 409);
+    }
     if (path.endsWith('/usage')) {
       return json({
         'v': 1,
@@ -167,7 +172,7 @@ class _Bridge extends DshConnection {
       final args = (envelope['payload'] as Map)['args'] as Map;
       final Object? result;
       if (path == '/api/agentPresets/list') {
-        result = {'presets': [{'id': companionPresetId}]};
+        result = {'presets': [if (hasPreset) {'id': companionPresetId}]};
       } else if (path == '/api/agentPresets/select') {
         final id = args['agentId']! as String;
         expect(args['agentPreset'], companionPresetId);
@@ -422,6 +427,18 @@ void main() {
       expect(jsonDecode(memory['block']! as String), containsPair('version', 3));
       expect(room.memory.store.messages().where((row) => row['role'] == 'user').single['text'], raw);
       expect(room.asked, isEmpty, reason: 'the phone never starts a second foreground tool loop');
+    } finally {
+      await room.close(tester);
+    }
+  });
+
+  testWidgets('a persona-only session still sends its plain prompt when context is refused', (tester) async {
+    final room = _Room(root)..bridge.hasPreset = false;
+    await room.open(tester);
+    try {
+      await room.say(tester, '你好');
+      expect(room.client.prompts.single.text, '你好');
+      expect(room.bridge.prepared, isEmpty, reason: 'a refused context route is not a prepared sidecar');
     } finally {
       await room.close(tester);
     }
